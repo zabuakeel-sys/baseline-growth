@@ -1,71 +1,75 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addMonths, bonusCents, dueDateOf, monthOf, statement } from '../src/lib/billing.js';
+import { addMonths, dueDateOf, inShareWindow, monthOf, monthsBetween, shareCents, statement } from '../src/lib/billing.js';
 
 test('month arithmetic crosses years', () => {
   assert.equal(monthOf('2026-11-13'), '2026-11-01');
-  assert.equal(addMonths('2026-11-01', 1), '2026-12-01');
   assert.equal(addMonths('2026-12-01', 1), '2027-01-01');
   assert.equal(addMonths('2027-01-01', -1), '2026-12-01');
+  assert.equal(monthsBetween('2026-11-01', '2027-02-01'), 3);
   assert.equal(dueDateOf('2026-12-01'), '2027-01-15');
 });
 
-test('bonus is a share of growth over baseline, never negative', () => {
-  assert.equal(bonusCents({ bonusPercent: 15, baselineCents: 5_000_000, revenueCents: 5_750_000 }), 112_500);
-  assert.equal(bonusCents({ bonusPercent: 15, baselineCents: 5_000_000, revenueCents: 4_000_000 }), 0);
-  assert.equal(bonusCents({ bonusPercent: 0, baselineCents: 1, revenueCents: 100 }), 0);
-  assert.equal(bonusCents({ bonusPercent: 12.5, baselineCents: 0, revenueCents: 333 }), 42); // 41.625 rounds to 42
+test('share window: 36 months from the first month, or forever when open-ended', () => {
+  assert.equal(inShareWindow('2026-09-01', '2026-09-01', 36), true);
+  assert.equal(inShareWindow('2026-09-01', '2029-08-01', 36), true); // month 36
+  assert.equal(inShareWindow('2026-09-01', '2029-09-01', 36), false); // month 37
+  assert.equal(inShareWindow('2026-09-01', '2026-08-01', 36), false); // before they were a customer
+  assert.equal(inShareWindow('2026-09-01', '2040-01-01', null), true);
+  assert.equal(shareCents(123_456, 10), 12_346);
 });
 
-const client = { monthly_fee_cents: 350_000, bonus_percent: 15, contract_start: '2026-09-10', contract_end: null };
-const baseline = { monthly_revenue_cents: 5_000_000, signed_off: true };
+// LibraPro-style deal: 10% of what each brought customer pays, for 36 months, no fixed fee.
+const libra = { monthly_fee_cents: 0, share_percent: 10, share_months: 36, signup_fee_cents: 0, contract_start: '2026-09-01', contract_end: null };
 
-test('fees run from the start month to this month; bonus only on confirmed numbers', () => {
+test('share only on confirmed revenue of customers we brought', () => {
   const rows = statement({
-    client, baseline, today: '2026-11-20',
-    results: [
-      { month: '2026-09-01', revenue_cents: 5_750_000, confirmed: true },
-      { month: '2026-10-01', revenue_cents: 6_000_000, confirmed: false },
+    client: libra, today: '2026-11-20',
+    customers: [{ id: 1, customer_since: '2026-09-10' }, { id: 2, customer_since: '2026-10-02' }],
+    revenue: [
+      { lead_id: 1, month: '2026-09-01', revenue_cents: 400_000, confirmed: true },
+      { lead_id: 1, month: '2026-10-01', revenue_cents: 400_000, confirmed: true },
+      { lead_id: 2, month: '2026-10-01', revenue_cents: 250_000, confirmed: false },
+      { lead_id: 99, month: '2026-10-01', revenue_cents: 1_000_000, confirmed: true }, // not one of ours
     ],
-    payments: [{ month: '2026-09-01', amount_cents: 462_500 }],
+    payments: [{ month: '2026-09-01', amount_cents: 40_000 }],
   });
-  assert.deepEqual(rows.map((r) => r.month), ['2026-09-01', '2026-10-01', '2026-11-01']);
   const [sep, oct, nov] = rows;
-  assert.equal(sep.bonusCents, 112_500);
-  assert.equal(sep.dueCents, 462_500);
+  assert.equal(sep.shareCents, 40_000);
   assert.equal(sep.status, 'paid');
-  assert.equal(oct.bonusCents, 0, 'unconfirmed month is not billed a bonus');
-  assert.equal(oct.bonusPending, true);
-  assert.equal(oct.status, 'late', 'October was due Nov 15 and today is Nov 20');
-  assert.equal(nov.status, 'upcoming');
+  assert.equal(oct.shareCents, 40_000, 'customer 2 is unconfirmed, outsider ignored');
+  assert.equal(oct.waitingCents, 25_000);
+  assert.equal(oct.status, 'late', 'October was due Nov 15, today is Nov 20');
+  assert.equal(nov.dueCents, 0);
+  assert.equal(nov.status, 'paid', 'nothing owed yet is not shown as unpaid');
 });
 
-test('not late until after the 15th', () => {
-  const rows = statement({ client, baseline, results: [], payments: [], today: '2026-10-15' });
-  assert.equal(rows[0].status, 'open'); // September, due Oct 15, today is Oct 15
-  const later = statement({ client, baseline, results: [], payments: [], today: '2026-10-16' });
-  assert.equal(later[0].status, 'late');
-});
-
-test('no bonus without a signed baseline', () => {
+test('revenue before a customer started is not shared', () => {
   const rows = statement({
-    client, baseline: { monthly_revenue_cents: 5_000_000, signed_off: false }, today: '2026-10-20',
-    results: [{ month: '2026-09-01', revenue_cents: 9_000_000, confirmed: true }], payments: [],
+    client: libra, today: '2026-10-01',
+    customers: [{ id: 1, customer_since: '2026-09-20' }],
+    revenue: [{ lead_id: 1, month: '2026-08-01', revenue_cents: 500_000, confirmed: true }],
+    payments: [],
   });
-  assert.equal(rows[0].bonusCents, 0);
-  assert.equal(rows[0].bonusPending, true);
+  assert.equal(rows.reduce((s, r) => s + r.shareCents, 0), 0);
 });
 
-test('fees stop after the contract end month and partial payments leave a balance', () => {
+// AutoAt-style deal: a fee per shop signed, plus a small monthly retainer.
+test('signup fee lands in the month the customer started; monthly fee every month', () => {
   const rows = statement({
-    client: { ...client, contract_end: '2026-10-31' }, baseline, today: '2027-02-01',
-    results: [], payments: [{ month: '2026-10-01', amount_cents: 100_000 }],
+    client: { monthly_fee_cents: 50_000, share_percent: 0, share_months: null, signup_fee_cents: 25_000, contract_start: '2026-10-15', contract_end: null },
+    customers: [{ id: 1, customer_since: '2026-10-20' }, { id: 2, customer_since: '2026-10-28' }, { id: 3, customer_since: '2026-11-03' }, { id: 4, customer_since: null }],
+    revenue: [], payments: [], today: '2026-11-13',
   });
-  assert.deepEqual(rows.map((r) => r.month), ['2026-09-01', '2026-10-01']);
-  assert.equal(rows[1].balanceCents, 250_000);
-  assert.equal(rows[1].status, 'late');
+  assert.deepEqual(rows.map((r) => [r.month, r.signups, r.dueCents]), [['2026-10-01', 2, 100_000], ['2026-11-01', 1, 75_000]]);
+  assert.equal(rows[0].status, 'open', 'October is due Nov 15; today is Nov 13');
 });
 
-test('no contract start means no bill', () => {
-  assert.deepEqual(statement({ client: { ...client, contract_start: null }, baseline, results: [], payments: [], today: '2026-11-01' }), []);
+test('not late until after the 15th; contract end stops billing', () => {
+  const client = { ...libra, monthly_fee_cents: 100_000 };
+  assert.equal(statement({ client, customers: [], revenue: [], payments: [], today: '2026-10-15' })[0].status, 'open');
+  assert.equal(statement({ client, customers: [], revenue: [], payments: [], today: '2026-10-16' })[0].status, 'late');
+  const ended = statement({ client: { ...client, contract_end: '2026-10-31' }, customers: [], revenue: [], payments: [], today: '2027-03-01' });
+  assert.deepEqual(ended.map((r) => r.month), ['2026-09-01', '2026-10-01']);
+  assert.deepEqual(statement({ client: { ...client, contract_start: null }, customers: [], revenue: [], payments: [], today: '2026-11-01' }), []);
 });

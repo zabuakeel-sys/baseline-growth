@@ -8,6 +8,7 @@ export type Client = {
   id: number; name: string; industry: string; website: string;
   contact_name: string; contact_email: string; contact_phone: string;
   status: Status; monthly_fee_cents: number; bonus_percent: number;
+  share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string;
   contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 
@@ -17,12 +18,15 @@ export type Baseline = {
   measured_on: string | null; signed_off: boolean; signed_off_by: string;
 };
 
-export type ClientRow = Client & { baseline_revenue_cents: number | null; baseline_signed: boolean | null };
+export type ClientRow = Client & { prospects: number; introduced: number; customers: number };
 
 export async function listClients(): Promise<ClientRow[]> {
   const { rows } = await query<ClientRow>(
-    `SELECT c.*, b.monthly_revenue_cents AS baseline_revenue_cents, b.signed_off AS baseline_signed
-     FROM clients c LEFT JOIN baselines b ON b.client_id = c.id
+    `SELECT c.*,
+       (SELECT count(*)::int FROM leads l WHERE l.client_id = c.id AND l.status IN ('new', 'following_up', 'talking')) AS prospects,
+       (SELECT count(*)::int FROM leads l WHERE l.client_id = c.id AND l.status = 'introduced') AS introduced,
+       (SELECT count(*)::int FROM leads l WHERE l.client_id = c.id AND l.status = 'won') AS customers
+     FROM clients c
      ORDER BY CASE c.status WHEN 'active' THEN 0 WHEN 'prospect' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END, c.name`,
   );
   return rows;
@@ -50,12 +54,17 @@ export function parseClientForm(f: FormData, { includeTerms }: { includeTerms: b
     industry: str(f, 'industry'), website: str(f, 'website'),
     contact_name: str(f, 'contact_name'), contact_email: str(f, 'contact_email'), contact_phone: str(f, 'contact_phone'),
     notes: str(f, 'notes'),
+    offer: str(f, 'offer'), mailing_address: str(f, 'mailing_address'),
   };
   if (includeTerms) {
     const fee = parseDollarsToCents(f.get('monthly_fee'));
     if (Number.isNaN(fee)) errors.push('Monthly fee must be a dollar amount, like 3500.');
-    const bonus = parsePercent(f.get('bonus_percent'));
-    if (Number.isNaN(bonus)) errors.push('Growth bonus must be a percent from 0 to 100.');
+    const share = parsePercent(f.get('share_percent'));
+    if (Number.isNaN(share)) errors.push('Revenue share must be a percent from 0 to 100.');
+    const shareMonths = parseWholeNumber(f.get('share_months'));
+    if (Number.isNaN(shareMonths) || shareMonths === 0) errors.push('Share months must be a whole number above zero, or empty for as long as the customer stays.');
+    const signupFee = parseDollarsToCents(f.get('signup_fee'));
+    if (Number.isNaN(signupFee)) errors.push('Fee per new customer must be a dollar amount.');
     const minimum = parseWholeNumber(f.get('minimum_months'));
     if (Number.isNaN(minimum)) errors.push('Minimum months must be a whole number.');
     const start = str(f, 'contract_start');
@@ -64,7 +73,7 @@ export function parseClientForm(f: FormData, { includeTerms }: { includeTerms: b
     if (end && !DATE.test(end)) errors.push('Contract end must be a date.');
     if (start && end && end < start) errors.push('Contract end cannot be before the start.');
     Object.assign(values, {
-      monthly_fee_cents: fee ?? 0, bonus_percent: bonus ?? 0,
+      monthly_fee_cents: fee ?? 0, share_percent: share ?? 0, share_months: shareMonths, signup_fee_cents: signupFee ?? 0,
       minimum_months: minimum ?? 6, contract_start: start || null, contract_end: end || null,
     });
   }

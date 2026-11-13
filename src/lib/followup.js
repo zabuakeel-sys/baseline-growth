@@ -1,24 +1,28 @@
-// Inquiry follow-up: when each lead is due for its next touch, and what to say.
-// Plain JS so tests can load it directly.
+// Outreach to prospects we find for a client: when each is due for the next touch, what to
+// say, and how the pipeline is doing. Plain JS so tests can load it directly.
 //
-// The rhythm: reply the day the inquiry arrives, then follow up 1, 3, 7 and 14 days after it
-// arrived, until the lead replies, buys or says no. After the last touch with no reply the
-// lead is due a decision (mark it lost, or keep it open by hand).
+// These people did not contact us, so the rhythm is gentler than for an inquiry: a first
+// message, then follow-ups 3, 7 and 14 days later, until they reply or the sequence ends.
+// Every email carries an opt-out line and the sender's postal address (required for
+// commercial email in the US under CAN-SPAM). Anyone who opts out is never contacted again.
 
-/** Days after the inquiry for each touch. Touch 0 is the first reply. */
-export const SCHEDULE_DAYS = [0, 1, 3, 7, 14];
+/** Days after the prospect was added for each touch. Touch 0 is the first message. */
+export const SCHEDULE_DAYS = [0, 3, 7, 14];
 
-export const SOURCES = ['Phone', 'Website', 'Email', 'Referral', 'Social media', 'Walk-in', 'Other'];
+export const SOURCES = ['Research', 'Referral', 'Event', 'Walk-in visit', 'Social media', 'Inbound to us', 'Other'];
 
+/** Pipeline stages, in order. 'won' is stored as-is and shown as "Customer". */
 export const STATUSES = {
   new: 'New',
-  following_up: 'Following up',
+  following_up: 'Reaching out',
   talking: 'Talking',
-  won: 'Won',
+  introduced: 'Introduced to client',
+  won: 'Customer',
   lost: 'Lost',
+  opted_out: 'Do not contact',
 };
 
-export const LOST_REASONS = ['No response', 'Price', 'Went with someone else', 'Not a fit', 'Timing', 'Other'];
+export const LOST_REASONS = ['No response', 'Not interested', 'Price', 'Went with someone else', 'Not a fit', 'Timing', 'Other'];
 
 const addDays = (iso, days) => {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -29,72 +33,68 @@ const addDays = (iso, days) => {
 /** Days from a to b, both 'YYYY-MM-DD'. */
 export const daysBetween = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
 
-/**
- * When the lead's next touch is due, given the date it arrived and how many touches were sent.
- * Returns null when every scheduled touch has been sent.
- */
-export function nextDue(receivedOn, touchesSent) {
+/** When the next touch is due, or null when every scheduled touch has been sent. */
+export function nextDue(addedOn, touchesSent) {
   if (touchesSent >= SCHEDULE_DAYS.length) return null;
-  return addDays(receivedOn, SCHEDULE_DAYS[touchesSent]);
+  return addDays(addedOn, SCHEDULE_DAYS[touchesSent]);
 }
 
-/** True when the lead still needs a touch on or before `today`. Only open, unanswered leads are due. */
+/** True when the prospect still needs a touch on or before `today`. Only unanswered prospects are due. */
 export function isDue(lead, today) {
   if (lead.status !== 'new' && lead.status !== 'following_up') return false;
   const due = nextDue(lead.received_on, lead.touches_sent);
   return due !== null && due <= today;
 }
 
-/** True when every touch went out and the lead never replied: time to decide. */
+/** Every touch went out with no reply: time to mark it lost. */
 export function needsDecision(lead) {
   return (lead.status === 'new' || lead.status === 'following_up') && lead.touches_sent >= SCHEDULE_DAYS.length;
 }
 
 const firstName = (name) => (String(name || '').trim().split(/\s+/)[0] || 'there');
 
+/** Lower-cases a leading word so it reads mid-sentence; acronyms like "HVAC" stay as typed. */
+const midSentence = (text) => {
+  const t = String(text || '').trim().replace(/[.\s]+$/, '');
+  return /^[A-Z][a-z]/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
+};
+
 /**
- * The suggested message for a touch. Short, plain, one question each; nothing that reads as
- * pressure. Placeholders come from the lead and the client.
+ * The suggested message for a touch. Short, plain, one question each, never pushy.
+ * offer:   one sentence on what the client does, e.g. "AutoAt sends drivers to independent shops near them".
+ * need:    what we think this prospect needs, optional.
+ * address: postal address for the email footer.
  */
-export function messageFor(touch, { leadName, clientName, need, senderName }) {
+export function messageFor(touch, { leadName, clientName, offer, need, senderName, address }) {
   const hi = `Hi ${firstName(leadName)},`;
-  // "Nightly cleaning" reads as "about nightly cleaning" mid-sentence; acronyms like "HVAC" stay as typed.
-  const trimmed = String(need || '').trim().replace(/[.\s]+$/, '');
-  const phrase = /^[A-Z][a-z]/.test(trimmed) ? trimmed[0].toLowerCase() + trimmed.slice(1) : trimmed;
-  const about = phrase ? ` about ${phrase}` : '';
-  const sign = `\n\n${senderName || ''}${senderName ? '\n' : ''}${clientName}`;
+  const what = offer ? `${offer.trim().replace(/[.\s]+$/, '')}.` : `I work with ${clientName}.`;
+  const fit = need ? ` I thought it could help with ${midSentence(need)}.` : '';
   const bodies = [
-    `${hi}\n\nThanks for reaching out to ${clientName}${about}. I'd be glad to help. What's the best time for a quick call so I can get you an accurate answer?`,
-    `${hi}\n\nFollowing up on your message${about}. Do you have a few minutes today or tomorrow to go over what you need?`,
-    `${hi}\n\nI wanted to make sure my last note reached you. If it helps, I can send a quote by email instead. Would that be easier?`,
-    `${hi}\n\nChecking in once more${about}. Is this still something you're looking for, or has it been taken care of?`,
-    `${hi}\n\nI haven't heard back, so I'll close this out for now. If you still need help${about}, just reply here and I'll pick it right back up.`,
+    `${hi}\n\nI'm reaching out on behalf of ${clientName}. ${what}${fit}\n\nWould a 10-minute call this week be worth it to see if it fits?`,
+    `${hi}\n\nFollowing up on my note about ${clientName}. Is this something you handle, or is there someone better to talk to?`,
+    `${hi}\n\nOne more try in case my last message got buried. Happy to send a short summary by email instead of a call. Would that help?`,
+    `${hi}\n\nI'll stop here so I'm not cluttering your inbox. If ${clientName} is ever useful to you, just reply and I'll pick it up.`,
   ];
-  return bodies[Math.min(touch, bodies.length - 1)] + sign;
+  const sign = `\n\n${senderName ? `${senderName}\n` : ''}On behalf of ${clientName}`;
+  const optOut = `\n\nIf you'd rather not hear from us, reply "no thanks" and we won't contact you again.${address ? `\n${address.trim()}` : ''}`;
+  return bodies[Math.min(touch, bodies.length - 1)] + sign + optOut;
 }
 
-const localDay = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date(iso));
-
 /**
- * Summary numbers for a set of leads: count, won, lost, win rate, average first-reply time in hours.
- * Reply time only counts leads logged on the day they arrived: for one logged later, the real
- * arrival time is unknown and the number would flatter us.
+ * Pipeline numbers for a set of prospects. "Reached" = at least one touch sent or a reply.
+ * Customer rate = customers / prospects reached.
  */
 export function leadStats(leads) {
-  const won = leads.filter((l) => l.status === 'won');
-  const lost = leads.filter((l) => l.status === 'lost');
-  const decided = won.length + lost.length;
-  const replyHours = leads
-    .filter((l) => l.first_touch_at && l.received_at && (!l.received_on || localDay(l.received_at) === l.received_on))
-    .map((l) => (Date.parse(l.first_touch_at) - Date.parse(l.received_at)) / 3_600_000)
-    .filter((h) => h >= 0);
+  const reached = leads.filter((l) => l.touches_sent > 0 || ['talking', 'introduced', 'won'].includes(l.status));
+  const replied = leads.filter((l) => ['talking', 'introduced', 'won'].includes(l.status) || (l.status === 'lost' && l.lost_reason !== 'No response'));
+  const introduced = leads.filter((l) => l.status === 'introduced' || l.status === 'won' || l.introduced_on);
+  const customers = leads.filter((l) => l.status === 'won');
   return {
     total: leads.length,
-    won: won.length,
-    lost: lost.length,
-    open: leads.length - decided,
-    winRate: decided ? Math.round((won.length / decided) * 100) : null,
-    wonValueCents: won.reduce((s, l) => s + (l.won_value_cents || 0), 0),
-    avgReplyHours: replyHours.length ? replyHours.reduce((s, h) => s + h, 0) / replyHours.length : null,
+    reached: reached.length,
+    replied: replied.length,
+    introduced: introduced.length,
+    customers: customers.length,
+    customerRate: reached.length ? Math.round((customers.length / reached.length) * 100) : null,
   };
 }

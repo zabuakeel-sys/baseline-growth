@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireOwner } from '@/lib/auth';
 import { allStatements, monthLabel, today } from '@/lib/work';
 import { formatCents } from '@/lib/money';
-import { monthOf } from '@/lib/billing';
+import { addMonths, monthOf } from '@/lib/billing';
 import { recordPayment } from '../work/actions';
 import ActionForm from '../ActionForm';
 
@@ -22,11 +22,9 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
   ).sort((a, b) => a.month.localeCompare(b.month) || a.client.name.localeCompare(b.client.name));
   const lateTotal = unpaid.filter((r) => r.status === 'late').reduce((s, r) => s + r.balanceCents, 0);
   const owedTotal = unpaid.filter((r) => r.status !== 'upcoming').reduce((s, r) => s + r.balanceCents, 0);
-  const recurring = statements
-    .filter(({ client }) => client.status === 'active' && (!client.contract_end || monthOf(client.contract_end) >= thisMonth))
-    .reduce((s, { client }) => s + client.monthly_fee_cents, 0);
+  const lastFull = statements.reduce((s, { rows }) => s + (rows.find((r) => r.month === addMonths(thisMonth, -1))?.dueCents ?? 0), 0);
   const paidAllTime = statements.reduce((s, { rows }) => s + rows.reduce((t, r) => t + r.paidCents, 0), 0);
-  const pendingBonus = statements.some(({ rows }) => rows.some((r) => r.bonusPending));
+  const waitingTotal = statements.reduce((s, { rows }) => s + rows.reduce((t, r) => t + r.waitingCents, 0), 0);
 
   return (
     <>
@@ -35,7 +33,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
       {saved && <p className="notice" role="status">Payment recorded.</p>}
 
       <div className="stats">
-        <div className="stat"><div className="label">Monthly fees, active clients</div><div className="value">{formatCents(recurring)}</div></div>
+        <div className="stat"><div className="label">Earned last month</div><div className="value">{formatCents(lastFull)}</div></div>
         <div className="stat"><div className="label">Owed now</div><div className="value">{formatCents(owedTotal)}</div></div>
         <div className="stat"><div className="label">Late</div><div className={`value${lateTotal ? ' late' : ''}`}>{formatCents(lateTotal)}</div></div>
         <div className="stat"><div className="label">Collected to date</div><div className="value">{formatCents(paidAllTime)}</div></div>
@@ -45,20 +43,21 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
         <h2 id="unpaid-h">Unpaid</h2>
         {statements.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            No billed clients yet. A client is billed once it is active and has a contract start date and fee.
+            No billed clients yet. A client is billed once it is active and has a contract start date and deal terms.
           </p>
         ) : unpaid.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>Everything is paid.</p>
         ) : (
           <table>
-            <thead><tr><th>Client</th><th>Month</th><th className="num">Fee</th><th className="num">Bonus</th><th className="num">Balance</th><th>Status</th></tr></thead>
+            <thead><tr><th>Client</th><th>Month</th><th className="num">Share</th><th className="num">New customers</th><th className="num">Fee</th><th className="num">Balance</th><th>Status</th></tr></thead>
             <tbody>
               {unpaid.map((r) => (
                 <tr key={`${r.client.id}-${r.month}`}>
                   <td><Link href={`/clients/${r.client.id}#money-h`}>{r.client.name}</Link></td>
                   <td>{monthLabel(r.month)}</td>
-                  <td className="num">{formatCents(r.feeCents)}</td>
-                  <td className="num">{r.bonusCents ? formatCents(r.bonusCents) : r.bonusPending ? 'Waiting' : '$0'}</td>
+                  <td className="num">{formatCents(r.shareCents)}</td>
+                  <td className="num">{r.signups ? `${r.signups}${r.signupCents ? ` · ${formatCents(r.signupCents)}` : ''}` : '-'}</td>
+                  <td className="num">{r.feeCents ? formatCents(r.feeCents) : '-'}</td>
                   <td className="num"><strong>{formatCents(r.balanceCents)}</strong></td>
                   <td><span className={`pill ${r.status === 'late' ? 'late' : r.status === 'upcoming' ? '' : 'missing'}`}>{STATUS_LABEL[r.status]}</span></td>
                 </tr>
@@ -66,10 +65,10 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
             </tbody>
           </table>
         )}
-        {pendingBonus && (
+        {waitingTotal > 0 && (
           <p className="muted" style={{ marginBottom: 0, fontSize: 13 }}>
-            &ldquo;Waiting&rdquo; means growth was recorded but the client has not confirmed the numbers (or the baseline) yet.
-            The bonus is only billed on confirmed numbers.
+            Another {formatCents(waitingTotal)} of revenue share is waiting: the client reported what those customers paid but has not
+            confirmed it yet. Only confirmed amounts are billed.
           </p>
         )}
       </section>

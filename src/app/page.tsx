@@ -1,32 +1,30 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { listClients } from '@/lib/clients';
-import { formatCents } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ClientsPage() {
-  const user = await requireUser();
-  const isOwner = user.role === 'owner';
+  await requireUser();
   const clients = await listClients();
   const active = clients.filter((c) => c.status === 'active');
-  const monthlyFees = active.reduce((sum, c) => sum + c.monthly_fee_cents, 0);
-  const signed = clients.filter((c) => c.baseline_signed).length;
+  const sum = (k: 'prospects' | 'introduced' | 'customers') => clients.reduce((s, c) => s + c[k], 0);
 
   return (
     <>
       <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1>Clients</h1>
-          <p className="sub" style={{ margin: 0 }}>Every client starts with a signed baseline. Growth is measured against it.</p>
+          <p className="sub" style={{ margin: 0 }}>We find new customers for each client and share in what those customers pay.</p>
         </div>
         <Link className="button" href="/clients/new">Add client</Link>
       </div>
 
       <div className="stats">
         <div className="stat"><div className="label">Active clients</div><div className="value">{active.length}</div></div>
-        <div className="stat"><div className="label">Baselines signed</div><div className="value">{signed} of {clients.length}</div></div>
-        {isOwner && <div className="stat"><div className="label">Monthly fees (active)</div><div className="value">{formatCents(monthlyFees)}</div></div>}
+        <div className="stat"><div className="label">Prospects in play</div><div className="value">{sum('prospects')}</div></div>
+        <div className="stat"><div className="label">With clients now</div><div className="value">{sum('introduced')}</div></div>
+        <div className="stat"><div className="label">Customers we brought</div><div className="value">{sum('customers')}</div></div>
       </div>
 
       <div className="card table-wrap">
@@ -35,20 +33,16 @@ export default async function ClientsPage() {
         ) : (
           <table>
             <thead>
-              <tr>
-                <th>Client</th><th>Status</th><th>Baseline</th>
-                <th className="num">Baseline revenue / mo</th>
-                {isOwner && <th className="num">Fee / mo</th>}
-              </tr>
+              <tr><th>Client</th><th>Status</th><th className="num">Prospects</th><th className="num">Introduced</th><th className="num">Customers</th></tr>
             </thead>
             <tbody>
               {clients.map((c) => (
                 <tr key={c.id}>
                   <td><Link href={`/clients/${c.id}`}>{c.name}</Link><div className="muted" style={{ fontSize: 13 }}>{c.industry}</div></td>
                   <td><span className={`pill ${c.status}`}>{c.status}</span></td>
-                  <td>{c.baseline_signed ? <span className="pill signed">Signed</span> : <span className="pill missing">Needed</span>}</td>
-                  <td className="num">{formatCents(c.baseline_revenue_cents)}</td>
-                  {isOwner && <td className="num">{c.monthly_fee_cents ? formatCents(c.monthly_fee_cents) : 'Not set'}</td>}
+                  <td className="num">{c.prospects}</td>
+                  <td className="num">{c.introduced}</td>
+                  <td className="num">{c.customers}</td>
                 </tr>
               ))}
             </tbody>

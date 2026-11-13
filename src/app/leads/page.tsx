@@ -13,11 +13,11 @@ export const dynamic = 'force-dynamic';
 async function addLeadAnyClient(formData: FormData): Promise<{ error?: string }> {
   'use server';
   const clientId = Number(formData.get('client_id'));
-  if (!Number.isInteger(clientId) || clientId <= 0) return { error: 'Pick which client the inquiry is for.' };
+  if (!Number.isInteger(clientId) || clientId <= 0) return { error: 'Pick which client this prospect is for.' };
   return addLead(clientId, '/leads', formData);
 }
 
-export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+export default async function ProspectsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const user = await requireUser();
   const { saved } = await searchParams;
   const now = today();
@@ -28,49 +28,47 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const due = leads.filter((l) => isDue(l, now));
   const decide = leads.filter((l) => needsDecision(l));
   const talking = leads.filter((l) => l.status === 'talking');
-  const waiting = leads.filter((l) => !due.includes(l) && !decide.includes(l) && !talking.includes(l));
+  const introduced = leads.filter((l) => l.status === 'introduced');
+  const waiting = leads.filter((l) => (l.status === 'new' || l.status === 'following_up') && !due.includes(l) && !decide.includes(l));
+  const card = (l: (typeof leads)[number]) => <LeadCard key={l.id} lead={l} back="/leads" senderName={user.name} today={now} showClient />;
 
   return (
     <>
-      <h1>Follow-ups</h1>
+      <h1>Prospects</h1>
       <p className="sub">
-        Every inquiry gets a reply the day it comes in, then a follow-up 1, 3, 7 and 14 days later until it is won or lost.
-        Send the message, then tap &ldquo;I sent it&rdquo;.
+        People and businesses we reach on a client&apos;s behalf. Each gets a first message, then follow-ups 3, 7 and 14 days
+        later until they reply. Introduce the interested ones to the client; when they buy, record them as a customer.
       </p>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
       <div className="stats">
-        <div className="stat"><div className="label">Due now</div><div className={`value${due.length ? ' late' : ''}`}>{due.length}</div></div>
+        <div className="stat"><div className="label">Messages due</div><div className={`value${due.length ? ' late' : ''}`}>{due.length}</div></div>
         <div className="stat"><div className="label">Talking</div><div className="value">{talking.length}</div></div>
-        <div className="stat"><div className="label">Waiting for next follow-up</div><div className="value">{waiting.length}</div></div>
+        <div className="stat"><div className="label">With the client</div><div className="value">{introduced.length}</div></div>
       </div>
 
       <details className="card" open={leads.length === 0}>
-        <summary><strong>Log a new inquiry</strong></summary>
-        <AddLeadForm action={addLeadAnyClient} users={users} defaultAssignee={user.id} today={now} clients={clients} />
+        <summary><strong>Add a prospect</strong></summary>
+        <AddLeadForm action={addLeadAnyClient} users={users} defaultAssignee={user.id} clients={clients} />
       </details>
 
       <section className="card" aria-labelledby="due-h">
-        <h2 id="due-h">Due now</h2>
-        {due.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nobody is waiting on a reply.</p>
-          : due.map((l) => <LeadCard key={l.id} lead={l} back="/leads" senderName={user.name} today={now} showClient />)}
+        <h2 id="due-h">Messages due</h2>
+        {due.length === 0 ? <p className="muted" style={{ margin: 0 }}>No messages due today.</p> : due.map(card)}
       </section>
-      {decide.length > 0 && (
-        <section className="card" aria-labelledby="decide-h">
-          <h2 id="decide-h">No reply after every follow-up</h2>
-          {decide.map((l) => <LeadCard key={l.id} lead={l} back="/leads" senderName={user.name} today={now} showClient />)}
+      {talking.length > 0 && <section className="card" aria-labelledby="talking-h"><h2 id="talking-h">Talking</h2>{talking.map(card)}</section>}
+      {introduced.length > 0 && (
+        <section className="card" aria-labelledby="intro-h">
+          <h2 id="intro-h">Introduced, waiting on the client</h2>
+          <p className="muted" style={{ marginTop: 0 }}>Ask the client how each one went. When one buys, record them as a customer.</p>
+          {introduced.map(card)}
         </section>
       )}
-      {talking.length > 0 && (
-        <section className="card" aria-labelledby="talking-h">
-          <h2 id="talking-h">Talking</h2>
-          {talking.map((l) => <LeadCard key={l.id} lead={l} back="/leads" senderName={user.name} today={now} showClient />)}
-        </section>
-      )}
+      {decide.length > 0 && <section className="card" aria-labelledby="decide-h"><h2 id="decide-h">No reply after every message</h2>{decide.map(card)}</section>}
       {waiting.length > 0 && (
         <details className="card">
-          <summary><strong>Waiting for next follow-up ({waiting.length})</strong></summary>
-          {waiting.map((l) => <LeadCard key={l.id} lead={l} back="/leads" senderName={user.name} today={now} showClient />)}
+          <summary><strong>Waiting for the next message ({waiting.length})</strong></summary>
+          {waiting.map(card)}
         </details>
       )}
     </>

@@ -1,8 +1,32 @@
 # Baseline Growth
 
-Private web app for running a revenue growth company: clients, deal terms, signed baselines,
-and (next) checkups, weekly work, monthly results and billing. The company name is set in
-`src/lib/config.ts`.
+Private web app for a company that finds new customers for client businesses and is paid a
+share of what those customers spend. The company name is set in `src/lib/config.ts`.
+
+## How it works
+
+1. **Prospects.** For each client, add the people or businesses we will reach. Each gets a
+   ready-to-send first message built from the client's one-line offer, then follow-ups 3, 7 and
+   14 days later until they reply. Copy the message or open it in email, send it, tap "I sent
+   it". Every message signs on the client's behalf, offers an opt-out and carries a mailing
+   address, which US law (CAN-SPAM) requires in commercial email.
+2. **Introduce and close.** Interested prospects are marked "Introduced to client" with a date:
+   the record that the customer came from us. When they buy, "Became a customer" with the date.
+3. **Customers we brought.** Each month the client reports what each of those customers paid
+   them. We enter it and mark it confirmed once the client confirms.
+4. **Money** (owner only). Per client: revenue share % x confirmed revenue of each customer we
+   brought, for the agreed number of months from the month they became a customer (or as long as
+   they stay), plus an optional fee per new customer and an optional monthly fee. Each month is
+   due the 15th of the next month and shows as late after that. The rules live in
+   `src/lib/billing.js`, tested in `tests/billing.test.mjs`.
+
+Also: anyone marked "asked not to be contacted" can never be added again, for any client.
+"This week" lists other tasks. The Revenue Checkup (15 questions, five areas) is an optional
+tool for understanding a new client before agreeing terms.
+
+Texts to prospects are deliberately not offered: cold texting carries legal risk under the
+TCPA. Nothing is sent automatically; that needs an email provider, a sending domain and a
+lawyer's sign-off.
 
 ## Run locally
 
@@ -14,52 +38,24 @@ and (next) checkups, weekly work, monthly results and billing. The company name 
 
 ## Tests
 
-    npm test                    # money, input parsing, checkup scoring, billing
+    npm test                    # money rules, outreach schedule and messages, checkup scoring
+    node e2e/model.cjs          # full browser run against http://localhost:3100 (needs Playwright
+    node e2e/checkup.cjs        # and a freshly migrated + seeded database, owner password
+                                # testpassword123 for owner@example.test)
 
 ## Deploy on Railway
 
 1. New project from this GitHub repo, plus a Postgres service (Railway sets `DATABASE_URL`).
 2. Set `OWNER_EMAIL`, `OWNER_PASSWORD` (10+ characters) and `OWNER_NAME` on the app service.
 3. Build command `npm run build`; start command `npm run migrate && npm run seed && npm start`.
-4. After the first login, the owner password can be removed from the variables; seeding only
-   creates an owner when none exists.
 
 ## Forgot the owner password
 
 In Railway, on the app service, set a new `OWNER_PASSWORD` (10+ characters) and
 `OWNER_RESET_PASSWORD=true`. After it redeploys once, delete `OWNER_RESET_PASSWORD`.
 
-## Revenue Checkup
-
-From a client page, "Start checkup" opens 15 statements across five areas (getting found,
-turning inquiries into sales, reaching the right buyers, bringing customers back, pricing).
-Rate each 1 to 5 with the owner. The result page scores each area 0 to 100, names the one or
-two areas holding revenue back, and builds a 90-day plan from them. "Print or save as PDF"
-gives the owner a copy. The statements and plan steps live in `src/lib/checkup.js`.
-
-## The loop
-
-1. **Checkup** finds where a client's revenue is stuck and builds a 90-day plan.
-2. **Baseline**: the client's numbers before we start, confirmed by the client.
-3. **The work**: "Add plan to tasks" on a checkup turns its plan into tasks due at the end of
-   each plan month. "This week" lists open tasks, late ones first; tap the box when done.
-4. **Monthly results**: each month's revenue, inquiries and new customers, compared to the
-   baseline.
-5. **Follow-ups**: log every inquiry the moment it comes in. Each gets a ready-to-send reply the
-   same day, then follow-ups 1, 3, 7 and 14 days after it arrived, until it is won or lost. Copy
-   the message or open it in email or texts, send it, tap "I sent it". Win rate, won value and
-   average first-reply time show per client. Messages are not sent automatically yet: that needs
-   an email or text provider, each client's sending domain, and legal sign-off for texts. The
-   schedule and messages live in `src/lib/followup.js`.
-6. **Money** (owner only): the monthly fee for every month from contract start to contract end
-   (or now), plus the growth bonus = bonus % x (month revenue - baseline revenue), never below
-   zero. The bonus is billed only when the client confirmed both the baseline and that month.
-   Each month is due on the 15th of the next month and shows as late after that. The rules live
-   in `src/lib/billing.js`, with tests in `tests/billing.test.mjs`.
-
 ## Rules built in
 
 - Money is stored in whole cents.
-- Only owners see or change deal terms and fees. Team members never see them.
-- Once a client confirms a baseline or a month's numbers, only an owner can change them,
-  because the growth bonus is measured against them.
+- Only owners see deal terms and money. Team members never do.
+- Once the client confirms a customer's monthly amount, only an owner can change it.

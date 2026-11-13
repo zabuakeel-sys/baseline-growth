@@ -27,13 +27,21 @@ export default function ClientForm({
       <label>Contact phone<input name="contact_phone" type="tel" defaultValue={client?.contact_phone} /></label>
       {showTerms && (
         <>
-          <label>Monthly fee ($)<input name="monthly_fee" inputMode="decimal" defaultValue={dollars(client?.monthly_fee_cents)} placeholder="3500" /></label>
-          <label>Growth bonus (% of increase)<input name="bonus_percent" inputMode="decimal" defaultValue={client?.bonus_percent || ''} placeholder="15" /></label>
+          <label>Revenue share (% of what each customer we bring pays)<input name="share_percent" inputMode="decimal" defaultValue={client?.share_percent || ''} placeholder="10" /></label>
+          <label>For how many months (empty = as long as they stay)<input name="share_months" inputMode="numeric" defaultValue={client?.share_months ?? ''} placeholder="36" /></label>
+          <label>Fee per new customer ($)<input name="signup_fee" inputMode="decimal" defaultValue={dollars(client?.signup_fee_cents)} placeholder="0" /></label>
+          <label>Monthly fee ($, optional)<input name="monthly_fee" inputMode="decimal" defaultValue={dollars(client?.monthly_fee_cents)} placeholder="0" /></label>
           <label>Contract start<input name="contract_start" type="date" defaultValue={client?.contract_start ?? ''} /></label>
           <label>Contract end (leave empty if ongoing)<input name="contract_end" type="date" defaultValue={client?.contract_end ?? ''} /></label>
           <label>Minimum months<input name="minimum_months" inputMode="numeric" defaultValue={client?.minimum_months ?? 6} /></label>
         </>
       )}
+      <label className="full">What they offer, in one sentence (goes into outreach messages)
+        <input name="offer" defaultValue={client?.offer} placeholder="AutoAt sends drivers to independent repair shops near them, free to join." />
+      </label>
+      <label className="full">Mailing address for outreach emails (required by law in commercial email)
+        <input name="mailing_address" defaultValue={client?.mailing_address} placeholder="Street, city, state, ZIP" />
+      </label>
       <label className="full">Notes<textarea name="notes" defaultValue={client?.notes} /></label>
       <div className="actions full"><button type="submit">{submitLabel}</button></div>
     </ActionForm>

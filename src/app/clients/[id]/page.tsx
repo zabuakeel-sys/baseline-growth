@@ -5,24 +5,21 @@ import { getClient } from '@/lib/clients';
 import { listCheckups } from '@/lib/checkups';
 import { AREAS, scoreCheckup } from '@/lib/checkup';
 import { formatCents } from '@/lib/money';
-import { monthOf, addMonths } from '@/lib/billing';
-import { clientResults, clientStatement, clientTasks, listUsers, monthLabel, today } from '@/lib/work';
-import { saveBaseline, updateClient } from '../actions';
-import { addTask, saveResult } from '../../work/actions';
+import { addMonths, inShareWindow, monthOf, shareCents } from '@/lib/billing';
+import { clientStatement, clientTasks, listUsers, monthLabel, today } from '@/lib/work';
+import { clientCustomers, clientLeads } from '@/lib/leads';
+import { leadStats } from '@/lib/followup';
+import { updateClient } from '../actions';
+import { addTask } from '../../work/actions';
+import { addLead, saveCustomerRevenue } from '../../leads/actions';
 import ClientForm from '../ClientForm';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
-import { clientLeads } from '@/lib/leads';
-import { leadStats } from '@/lib/followup';
-import { addLead } from '../../leads/actions';
 import LeadCard from '../../leads/LeadCard';
 import AddLeadForm from '../../leads/AddLeadForm';
 
 export const dynamic = 'force-dynamic';
 
-const dollars = (cents: number | null | undefined) => (cents === null || cents === undefined ? '' : String(cents / 100));
-const plain = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n));
-const signedCents = (c: number) => (c >= 0 ? `+${formatCents(c)}` : `-${formatCents(-c)}`);
 const STATUS_LABEL = { paid: 'Paid', open: 'Due', late: 'Late', upcoming: 'This month' } as const;
 
 export default async function ClientPage({
@@ -37,30 +34,25 @@ export default async function ClientPage({
   if (!Number.isInteger(id)) notFound();
   const found = await getClient(id);
   if (!found) notFound();
-  const { client, baseline } = found;
-  const [checkups, tasks, results, users, leads] = await Promise.all([listCheckups(id), clientTasks(id), clientResults(id), listUsers(), clientLeads(id)]);
-  const money = isOwner ? await clientStatement(client, baseline) : [];
+  const { client } = found;
+  const [checkups, tasks, users, leads, { customers, revenue }] = await Promise.all([
+    listCheckups(id), clientTasks(id), listUsers(), clientLeads(id), clientCustomers(id),
+  ]);
+  const money = isOwner ? await clientStatement(client) : [];
   const { saved } = await searchParams;
-  const locked = Boolean(baseline?.signed_off) && !isOwner;
   const now = today();
+  const lastMonth = addMonths(monthOf(now), -1).slice(0, 7);
   const openTasks = tasks.filter((t) => !t.done_at);
   const doneTasks = tasks.filter((t) => t.done_at);
-  const baseRevenue = baseline?.monthly_revenue_cents ?? null;
-  const lastMonth = addMonths(monthOf(now), -1).slice(0, 7);
-  const activeLeads = leads.filter((l) => l.status !== 'won' && l.status !== 'lost');
-  const closedLeads = leads.filter((l) => l.status === 'won' || l.status === 'lost');
-  // Lead numbers per month, offered as a hint when entering monthly results.
-  const leadMonths = new Map<string, { inquiries: number; won: number }>();
-  for (const l of leads) {
-    const m = l.received_on.slice(0, 7);
-    const e = leadMonths.get(m) ?? { inquiries: 0, won: 0 };
-    e.inquiries += 1;
-    if (l.status === 'won') e.won += 1;
-    leadMonths.set(m, e);
-  }
-  const lastMonthLeads = leadMonths.get(lastMonth);
+  const inPlay = leads.filter((l) => ['new', 'following_up', 'talking', 'introduced'].includes(l.status));
+  const closedProspects = leads.filter((l) => l.status === 'lost' || l.status === 'opted_out');
   const stats = leadStats(leads);
   const back = `/clients/${id}#leads-h`;
+  const terms = [
+    client.share_percent > 0 && `${client.share_percent}% of what each customer we bring pays${client.share_months ? ` for ${client.share_months} months` : ', for as long as they stay'}`,
+    client.signup_fee_cents > 0 && `${formatCents(client.signup_fee_cents)} per new customer`,
+    client.monthly_fee_cents > 0 && `${formatCents(client.monthly_fee_cents)} a month`,
+  ].filter(Boolean).join(' + ');
 
   return (
     <>
@@ -68,61 +60,100 @@ export default async function ClientPage({
       <h1>{client.name}</h1>
       <p className="sub">
         {client.industry || 'No industry set'}
-        {isOwner && client.monthly_fee_cents > 0 && <> · {formatCents(client.monthly_fee_cents)}/mo + {client.bonus_percent}% of growth</>}
+        {isOwner && terms && <> · {terms}</>}
       </p>
+      {!client.offer && <p className="muted">Add what {client.name} offers, in one sentence, under Details below. Outreach messages use it.</p>}
       {saved && <p className="notice" role="status">{saved}.</p>}
 
-      <section className="card" aria-labelledby="checkups-h">
-        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-          <h2 id="checkups-h" style={{ margin: 0 }}>1. Revenue Checkups</h2>
-          <Link className="button" href={`/clients/${id}/checkup`}>Start checkup</Link>
-        </div>
-        {checkups.length === 0 ? (
-          <p className="muted" style={{ marginBottom: 0 }}>No checkup yet. Run one with the owner to find where revenue is stuck.</p>
-        ) : (
-          <ul className="plain-list">
-            {checkups.map((k) => {
-              const { focus, overall } = scoreCheckup(k.answers);
-              const names = focus.map((f) => AREAS.find((a) => a.key === f)!.name.toLowerCase());
-              return (
-                <li key={k.id}>
-                  <Link href={`/checkups/${k.id}`}>{k.conducted_on}</Link>
-                  {' · '}{names.length ? `Stuck at ${names.join(' and ')}` : 'No single bottleneck'}
-                  <span className="muted"> · overall {overall}</span>
-                </li>
-              );
-            })}
-          </ul>
+      <section className="card" aria-labelledby="leads-h">
+        <h2 id="leads-h">1. Prospects we are reaching</h2>
+        {leads.length > 0 && (
+          <div className="stats">
+            <div className="stat"><div className="label">Prospects</div><div className="value">{stats.total}</div></div>
+            <div className="stat"><div className="label">Reached</div><div className="value">{stats.reached}</div></div>
+            <div className="stat"><div className="label">Introduced</div><div className="value">{stats.introduced}</div></div>
+            <div className="stat"><div className="label">Became customers</div><div className="value">{stats.customers}{stats.customerRate !== null && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> ({stats.customerRate}% of reached)</span>}</div></div>
+          </div>
         )}
+        {inPlay.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
+        {inPlay.length === 0 && <p className="muted" style={{ marginTop: 0 }}>No prospects in play. Add the people or businesses you will reach for {client.name}.</p>}
+        {closedProspects.length > 0 && (
+          <details>
+            <summary className="muted">{closedProspects.length} lost or do not contact</summary>
+            {closedProspects.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
+          </details>
+        )}
+        <details style={{ marginTop: 12 }} open={leads.length === 0}>
+          <summary>Add a prospect</summary>
+          <AddLeadForm action={addLead.bind(null, id, `/clients/${id}#leads-h`)} users={users} defaultAssignee={user.id} />
+        </details>
       </section>
 
-      <section className="card" aria-labelledby="baseline-h">
-        <h2 id="baseline-h">2. Baseline</h2>
-        <p className="muted" style={{ marginTop: 0 }}>
-          The client&apos;s numbers before we start. Growth, and our bonus, is measured against monthly revenue here, so get
-          it confirmed by the client.
-        </p>
-        {locked ? (
-          <p>Confirmed by {baseline?.signed_off_by}: {formatCents(baseline?.monthly_revenue_cents)} a month. Only the owner can change a confirmed baseline.</p>
+      <section className="card" aria-labelledby="customers-h">
+        <h2 id="customers-h">2. Customers we brought</h2>
+        {customers.length === 0 ? (
+          <p className="muted" style={{ margin: 0 }}>None yet. When a prospect buys from {client.name}, mark them &ldquo;Became a customer&rdquo;.</p>
         ) : (
-          <ActionForm className="grid" action={saveBaseline.bind(null, id)}>
-            <label>Monthly revenue ($)<input name="monthly_revenue" inputMode="decimal" defaultValue={dollars(baseline?.monthly_revenue_cents)} placeholder="50000" /></label>
-            <label>Inquiries per month<input name="monthly_inquiries" inputMode="numeric" defaultValue={plain(baseline?.monthly_inquiries)} /></label>
-            <label>Close rate (%)<input name="close_rate_percent" inputMode="decimal" defaultValue={plain(baseline?.close_rate_percent)} /></label>
-            <label>Average sale ($)<input name="avg_sale" inputMode="decimal" defaultValue={dollars(baseline?.avg_sale_cents)} /></label>
-            <label>Repeat rate (%)<input name="repeat_rate_percent" inputMode="decimal" defaultValue={plain(baseline?.repeat_rate_percent)} /></label>
-            <label>Measured on<input name="measured_on" type="date" defaultValue={baseline?.measured_on ?? ''} /></label>
-            <label className="check full"><input type="checkbox" name="signed_off" defaultChecked={baseline?.signed_off} style={{ minHeight: 0 }} /> Client has confirmed these numbers</label>
-            <label>Confirmed by (name at client)<input name="signed_off_by" defaultValue={baseline?.signed_off_by} /></label>
-            <div className="actions full"><button type="submit">Save baseline</button></div>
-          </ActionForm>
+          <>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Each month, ask {client.name} what each customer paid them and enter it here. Only amounts the client confirmed are billed.
+            </p>
+            {customers.map((c) => {
+              const rows = revenue.filter((r) => r.lead_id === c.id);
+              const start = monthOf(c.customer_since ?? now);
+              const total = rows.reduce((s, r) => s + r.revenue_cents, 0);
+              const windowLeft = client.share_months ? client.share_months - (Number(now.slice(0, 4)) - Number(start.slice(0, 4))) * 12 - (Number(now.slice(5, 7)) - Number(start.slice(5, 7))) : null;
+              return (
+                <article key={c.id} className="lead">
+                  <header className="lead-head">
+                    <div>
+                      <strong>{c.name}</strong>
+                      <div className="task-meta">
+                        Customer since {c.customer_since}
+                        {client.share_percent > 0 && (windowLeft === null ? ' · share for as long as they stay'
+                          : windowLeft > 0 ? ` · share for ${windowLeft} more month${windowLeft === 1 ? '' : 's'}` : ' · share period ended')}
+                      </div>
+                    </div>
+                    <span className="pill signed">{formatCents(total)} reported</span>
+                  </header>
+                  {rows.length > 0 && (
+                    <div className="table-wrap">
+                      <table>
+                        <thead><tr><th>Month</th><th className="num">They paid {client.name}</th>{isOwner && <th className="num">Our share</th>}<th>Confirmed</th></tr></thead>
+                        <tbody>
+                          {[...rows].reverse().map((r) => (
+                            <tr key={r.month}>
+                              <td>{monthLabel(r.month)}</td>
+                              <td className="num">{formatCents(r.revenue_cents)}</td>
+                              {isOwner && <td className="num">{inShareWindow(start, monthOf(r.month), client.share_months) ? formatCents(shareCents(r.revenue_cents, client.share_percent)) : 'Outside share period'}</td>}
+                              <td>{r.confirmed ? <span className="pill signed">{r.confirmed_by}</span> : <span className="pill missing">Not yet</span>}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <details>
+                    <summary>Enter a month</summary>
+                    <ActionForm className="grid" action={saveCustomerRevenue.bind(null, c.id, `/clients/${id}#customers-h`)}>
+                      <label>Month<input name="month" type="month" defaultValue={lastMonth < start.slice(0, 7) ? start.slice(0, 7) : lastMonth} required /></label>
+                      <label>What they paid ($)<input name="revenue" inputMode="decimal" required /></label>
+                      <label className="check full"><input type="checkbox" name="confirmed" style={{ minHeight: 0 }} /> {client.name} confirmed this amount</label>
+                      <label>Confirmed by (name at client)<input name="confirmed_by" /></label>
+                      <div className="actions full"><button type="submit">Save</button></div>
+                    </ActionForm>
+                  </details>
+                </article>
+              );
+            })}
+          </>
         )}
       </section>
 
       <section className="card" aria-labelledby="tasks-h">
-        <h2 id="tasks-h">3. The work</h2>
+        <h2 id="tasks-h">3. Other work</h2>
         {openTasks.length === 0 ? (
-          <p className="muted" style={{ marginTop: 0 }}>No open tasks. Open a checkup and add its plan, or add a task below.</p>
+          <p className="muted" style={{ marginTop: 0 }}>No open tasks.</p>
         ) : (
           <TaskList tasks={openTasks} back={`/clients/${id}#tasks-h`} showClient={false} today={now} />
         )}
@@ -143,111 +174,30 @@ export default async function ClientPage({
                 {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </label>
-            <label>Area
-              <select name="area" defaultValue="">
-                <option value="">None</option>
-                {AREAS.map((a) => <option key={a.key} value={a.name}>{a.name}</option>)}
-              </select>
-            </label>
             <div className="actions full"><button type="submit">Add task</button></div>
           </ActionForm>
         </details>
       </section>
 
-      <section className="card" aria-labelledby="leads-h">
-        <h2 id="leads-h">4. Inquiries and follow-up</h2>
-        {leads.length > 0 && (
-          <div className="stats">
-            <div className="stat"><div className="label">Inquiries logged</div><div className="value">{stats.total}</div></div>
-            <div className="stat"><div className="label">Win rate</div><div className="value">{stats.winRate === null ? 'None closed' : `${stats.winRate}%`}</div></div>
-            <div className="stat"><div className="label">Won value</div><div className="value">{formatCents(stats.wonValueCents)}</div></div>
-            <div className="stat"><div className="label">Average first reply</div><div className="value">{stats.avgReplyHours === null ? 'None yet' : stats.avgReplyHours < 1 ? `${Math.round(stats.avgReplyHours * 60)} min` : `${stats.avgReplyHours.toFixed(1)} h`}</div></div>
-          </div>
-        )}
-        {activeLeads.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
-        {activeLeads.length === 0 && <p className="muted" style={{ marginTop: 0 }}>No open inquiries. Log each one the moment it comes in.</p>}
-        {closedLeads.length > 0 && (
-          <details>
-            <summary className="muted">{closedLeads.length} won or lost</summary>
-            {closedLeads.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
-          </details>
-        )}
-        <details style={{ marginTop: 12 }} open={leads.length === 0}>
-          <summary>Log an inquiry</summary>
-          <AddLeadForm action={addLead.bind(null, id, `/clients/${id}`)} users={users} defaultAssignee={user.id} today={now} />
-        </details>
-      </section>
-
-      <section className="card" aria-labelledby="results-h">
-        <h2 id="results-h">5. Monthly results</h2>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Each month, enter the client&apos;s numbers. Growth is that month&apos;s revenue minus the baseline
-          {baseRevenue !== null ? ` (${formatCents(baseRevenue)})` : ''}.
-        </p>
-        {results.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Month</th><th className="num">Revenue</th><th className="num">Growth</th><th className="num">Inquiries</th><th className="num">New customers</th><th>Confirmed</th></tr></thead>
-              <tbody>
-                {results.map((r) => {
-                  const growth = baseRevenue !== null ? r.revenue_cents - baseRevenue : null;
-                  return (
-                    <tr key={r.month}>
-                      <td>{monthLabel(r.month)}</td>
-                      <td className="num">{formatCents(r.revenue_cents)}</td>
-                      <td className={`num ${growth !== null && growth > 0 ? 'up' : ''}`}>
-                        {growth === null ? 'No baseline' : baseRevenue ? `${signedCents(growth)} (${Math.round((growth / baseRevenue) * 100)}%)` : signedCents(growth)}
-                      </td>
-                      <td className="num">{r.inquiries ?? '-'}</td>
-                      <td className="num">{r.new_customers ?? '-'}</td>
-                      <td>{r.confirmed ? <span className="pill signed">{r.confirmed_by}</span> : <span className="pill missing">Not yet</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <details style={{ marginTop: 12 }} open={results.length === 0}>
-          <summary>Enter a month</summary>
-          {lastMonthLeads && (
-            <p className="muted" style={{ fontSize: 13 }}>
-              From the inquiry log for {monthLabel(`${lastMonth}-01`)}: {lastMonthLeads.inquiries} inquiries, {lastMonthLeads.won} won.
-              Use the client&apos;s own totals if they differ; not every inquiry may be logged here.
-            </p>
-          )}
-          <ActionForm className="grid" action={saveResult.bind(null, id)}>
-            <label>Month<input name="month" type="month" defaultValue={lastMonth} required /></label>
-            <label>Revenue ($)<input name="revenue" inputMode="decimal" required /></label>
-            <label>Inquiries<input name="inquiries" inputMode="numeric" /></label>
-            <label>New customers<input name="new_customers" inputMode="numeric" /></label>
-            <label className="full">Notes<input name="notes" placeholder="What changed this month" /></label>
-            <label className="check full"><input type="checkbox" name="confirmed" style={{ minHeight: 0 }} /> Client has confirmed these numbers</label>
-            <label>Confirmed by (name at client)<input name="confirmed_by" /></label>
-            <div className="actions full"><button type="submit">Save month</button></div>
-          </ActionForm>
-          <p className="muted" style={{ fontSize: 13 }}>Entering a month that already exists replaces it.</p>
-        </details>
-      </section>
-
       {isOwner && (
         <section className="card" aria-labelledby="money-h">
-          <h2 id="money-h">6. What they owe us</h2>
+          <h2 id="money-h">4. What they owe us</h2>
           {money.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>Not billed yet. Set the status to active, a contract start date and a fee below.</p>
+            <p className="muted" style={{ margin: 0 }}>Not billed yet. Set the status to active, a contract start date and the deal terms below.</p>
           ) : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Month</th><th className="num">Fee</th><th className="num">Bonus</th><th className="num">Paid</th><th className="num">Balance</th><th>Status</th></tr></thead>
+                <thead><tr><th>Month</th><th className="num">Share</th><th className="num">New customers</th><th className="num">Fee</th><th className="num">Paid</th><th className="num">Balance</th><th>Status</th></tr></thead>
                 <tbody>
                   {[...money].reverse().map((r) => (
                     <tr key={r.month}>
                       <td>{monthLabel(r.month)}</td>
-                      <td className="num">{formatCents(r.feeCents)}</td>
-                      <td className="num">{r.bonusCents ? formatCents(r.bonusCents) : r.bonusPending ? 'Waiting' : '$0'}</td>
+                      <td className="num">{formatCents(r.shareCents)}{r.waitingCents > 0 && <div className="task-meta">+{formatCents(r.waitingCents)} waiting</div>}</td>
+                      <td className="num">{r.signups ? `${r.signups}${r.signupCents ? ` · ${formatCents(r.signupCents)}` : ''}` : '-'}</td>
+                      <td className="num">{r.feeCents ? formatCents(r.feeCents) : '-'}</td>
                       <td className="num">{formatCents(r.paidCents)}</td>
                       <td className="num">{formatCents(Math.max(r.balanceCents, 0))}</td>
-                      <td><span className={`pill ${r.status === 'paid' ? 'signed' : r.status === 'late' ? 'late' : r.status === 'open' ? 'missing' : ''}`}>{STATUS_LABEL[r.status]}</span></td>
+                      <td><span className={`pill ${r.status === 'paid' ? 'signed' : r.status === 'late' ? 'late' : r.status === 'open' ? 'missing' : ''}`}>{r.dueCents === 0 ? 'Nothing owed' : STATUS_LABEL[r.status]}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -257,6 +207,29 @@ export default async function ClientPage({
           <p style={{ marginBottom: 0 }}><Link href="/money">Record a payment</Link></p>
         </section>
       )}
+
+      <section className="card" aria-labelledby="checkups-h">
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 id="checkups-h" style={{ margin: 0 }}>Revenue Checkups</h2>
+          <Link className="button secondary" href={`/clients/${id}/checkup`}>Start checkup</Link>
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>Optional: use with a new client to see where their business is weakest before you agree terms.</p>
+        {checkups.length > 0 && (
+          <ul className="plain-list">
+            {checkups.map((k) => {
+              const { focus, overall } = scoreCheckup(k.answers);
+              const names = focus.map((f) => AREAS.find((a) => a.key === f)!.name.toLowerCase());
+              return (
+                <li key={k.id}>
+                  <Link href={`/checkups/${k.id}`}>{k.conducted_on}</Link>
+                  {' · '}{names.length ? `Weakest: ${names.join(' and ')}` : 'No single weak area'}
+                  <span className="muted"> · overall {overall}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="card" aria-labelledby="details-h">
         <h2 id="details-h">Details{isOwner ? ' and deal terms' : ''}</h2>

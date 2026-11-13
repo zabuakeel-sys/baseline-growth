@@ -92,7 +92,7 @@ export default async function CheckupResultPage({ params }: { params: Promise<{ 
             </div>
           ))}
           <p className="muted" style={{ marginBottom: 0 }}>
-            Progress is measured against the signed baseline: monthly revenue, inquiries, close rate, average sale and repeat rate.
+            Use this to agree with the owner where new customers will help most.
           </p>
         </section>
       )}
