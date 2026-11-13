@@ -3,7 +3,7 @@ import type { Answers } from './checkup';
 
 export type Checkup = {
   id: number; client_id: number; conducted_on: string; conducted_by_name: string | null;
-  answers: Answers; notes: Record<string, string>; summary: string;
+  answers: Answers; notes: Record<string, string>; summary: string; tasks_created_at: string | null;
 };
 
 export async function getCheckup(id: number) {

@@ -8,7 +8,7 @@ export type Client = {
   id: number; name: string; industry: string; website: string;
   contact_name: string; contact_email: string; contact_phone: string;
   status: Status; monthly_fee_cents: number; bonus_percent: number;
-  contract_start: string | null; minimum_months: number; notes: string;
+  contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 
 export type Baseline = {
@@ -60,9 +60,12 @@ export function parseClientForm(f: FormData, { includeTerms }: { includeTerms: b
     if (Number.isNaN(minimum)) errors.push('Minimum months must be a whole number.');
     const start = str(f, 'contract_start');
     if (start && !DATE.test(start)) errors.push('Contract start must be a date.');
+    const end = str(f, 'contract_end');
+    if (end && !DATE.test(end)) errors.push('Contract end must be a date.');
+    if (start && end && end < start) errors.push('Contract end cannot be before the start.');
     Object.assign(values, {
       monthly_fee_cents: fee ?? 0, bonus_percent: bonus ?? 0,
-      minimum_months: minimum ?? 6, contract_start: start || null,
+      minimum_months: minimum ?? 6, contract_start: start || null, contract_end: end || null,
     });
   }
   return { errors, values };

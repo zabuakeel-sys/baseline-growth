@@ -14,7 +14,7 @@ and (next) checkups, weekly work, monthly results and billing. The company name 
 
 ## Tests
 
-    npm test                    # money, input parsing, checkup scoring
+    npm test                    # money, input parsing, checkup scoring, billing
 
 ## Deploy on Railway
 
@@ -37,9 +37,23 @@ Rate each 1 to 5 with the owner. The result page scores each area 0 to 100, name
 two areas holding revenue back, and builds a 90-day plan from them. "Print or save as PDF"
 gives the owner a copy. The statements and plan steps live in `src/lib/checkup.js`.
 
+## The loop
+
+1. **Checkup** finds where a client's revenue is stuck and builds a 90-day plan.
+2. **Baseline**: the client's numbers before we start, confirmed by the client.
+3. **The work**: "Add plan to tasks" on a checkup turns its plan into tasks due at the end of
+   each plan month. "This week" lists open tasks, late ones first; tap the box when done.
+4. **Monthly results**: each month's revenue, inquiries and new customers, compared to the
+   baseline.
+5. **Money** (owner only): the monthly fee for every month from contract start to contract end
+   (or now), plus the growth bonus = bonus % x (month revenue - baseline revenue), never below
+   zero. The bonus is billed only when the client confirmed both the baseline and that month.
+   Each month is due on the 15th of the next month and shows as late after that. The rules live
+   in `src/lib/billing.js`, with tests in `tests/billing.test.mjs`.
+
 ## Rules built in
 
 - Money is stored in whole cents.
 - Only owners see or change deal terms and fees. Team members never see them.
-- Once a client confirms a baseline, only an owner can change it, because the growth bonus is
-  measured against it.
+- Once a client confirms a baseline or a month's numbers, only an owner can change them,
+  because the growth bonus is measured against them.

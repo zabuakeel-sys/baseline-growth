@@ -5,6 +5,8 @@ import { getCheckup } from '@/lib/checkups';
 import { AREAS, buildPlan, scoreCheckup } from '@/lib/checkup';
 import { APP_NAME } from '@/lib/config';
 import PrintButton from './PrintButton';
+import ActionForm from '../../ActionForm';
+import { planToTasks } from '../../work/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +69,18 @@ export default async function CheckupResultPage({ params }: { params: Promise<{ 
 
       {focusAreas.length > 0 && (
         <section className="card" aria-labelledby="plan-h">
-          <h2 id="plan-h">90-day plan</h2>
+          <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+            <h2 id="plan-h" style={{ margin: 0 }}>90-day plan</h2>
+            <div className="no-print">
+              {checkup.tasks_created_at ? (
+                <Link href={`/clients/${checkup.client_id}#tasks-h`}>In the task list</Link>
+              ) : (
+                <ActionForm action={planToTasks.bind(null, checkup.id)}>
+                  <button type="submit">Add plan to tasks</button>
+                </ActionForm>
+              )}
+            </div>
+          </div>
           {plan.map((m) => m.items.length > 0 && (
             <div key={m.month} className="plan-month">
               <h3>Month {m.month}</h3>

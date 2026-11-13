@@ -30,6 +30,7 @@ export default function ClientForm({
           <label>Monthly fee ($)<input name="monthly_fee" inputMode="decimal" defaultValue={dollars(client?.monthly_fee_cents)} placeholder="3500" /></label>
           <label>Growth bonus (% of increase)<input name="bonus_percent" inputMode="decimal" defaultValue={client?.bonus_percent || ''} placeholder="15" /></label>
           <label>Contract start<input name="contract_start" type="date" defaultValue={client?.contract_start ?? ''} /></label>
+          <label>Contract end (leave empty if ongoing)<input name="contract_end" type="date" defaultValue={client?.contract_end ?? ''} /></label>
           <label>Minimum months<input name="minimum_months" inputMode="numeric" defaultValue={client?.minimum_months ?? 6} /></label>
         </>
       )}
