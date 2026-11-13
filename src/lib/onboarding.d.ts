@@ -7,3 +7,4 @@ export function buildScript(a: { name: string; offer: string; why_us: string; fi
 export function missingAnswers(get: (k: string) => unknown): string[];
 export const US_METROS: string[];
 export function isNationwide(place: string): boolean;
+export function missingQuestions(get: (k: string) => unknown): Question[];

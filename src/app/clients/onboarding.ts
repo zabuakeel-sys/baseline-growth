@@ -3,13 +3,13 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { query } from '@/lib/db';
 import { requireOwner } from '@/lib/auth';
-import { QUESTIONS, TERM_KEYS, buildScript, buildTargets, missingAnswers, objectionPairs } from '@/lib/onboarding';
+import { QUESTIONS, TERM_KEYS, buildScript, buildTargets, missingQuestions, objectionPairs } from '@/lib/onboarding';
 import { readSite } from '@/lib/research';
 import { draftSignup } from '@/lib/coach';
 import { parsePricingLines } from '@/lib/playbook';
 import { parseDollarsToCents, parsePercent, parseWholeNumber } from '@/lib/money';
 
-type Result = { error?: string };
+type Result = { error?: string; field?: string };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -19,14 +19,14 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export async function saveOnboarding(clientId: number | null, formData: FormData): Promise<Result> {
   await requireOwner();
   const get = (k: string) => String(formData.get(k) ?? '').trim();
-  const missing = missingAnswers(get);
-  if (missing.length) return { error: `Still needed: ${missing[0]}${missing.length > 1 ? ` (and ${missing.length - 1} more)` : ''}` };
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(get('contact_email'))) return { error: 'The contact email does not look right.' };
+  const missing = missingQuestions(get);
+  if (missing.length) return { error: `Still needed: ${missing[0].ask}${missing.length > 1 ? ` (and ${missing.length - 1} more)` : ''}`, field: missing[0].key };
+  if (get('contact_email') && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(get('contact_email'))) return { error: 'The contact email does not look right.', field: 'contact_email' };
   if (get('claim_url')) {
-    try { const u = new URL(get('claim_url')); if (!/^https?:$/.test(u.protocol)) throw new Error(); } catch { return { error: 'The booking link must be a full web address starting with https://' }; }
+    try { const u = new URL(get('claim_url')); if (!/^https?:$/.test(u.protocol)) throw new Error(); } catch { return { error: 'The booking link must be a full web address starting with https://', field: 'claim_url' }; }
   }
   if (get('logo_url')) {
-    try { const u = new URL(get('logo_url')); if (u.protocol !== 'https:') throw new Error(); } catch { return { error: 'The logo link must be a full web address starting with https://' }; }
+    try { const u = new URL(get('logo_url')); if (u.protocol !== 'https:') throw new Error(); } catch { return { error: 'The logo link must be a full web address starting with https://', field: 'logo_url' }; }
   }
   const value = parseDollarsToCents(get('customer_value'));
   const share = parsePercent(get('share_percent'));
@@ -38,9 +38,9 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   if (Number.isNaN(months) || months === 0) return { error: 'Months must be a whole number above zero, or empty.' };
   if (get('contract_start') && !DATE.test(get('contract_start'))) return { error: 'Agreement start must be a date.' };
   const { types, errors } = parsePricingLines(get('pricing'));
-  if (errors.length) return { error: errors[0] };
+  if (errors.length) return { error: errors[0], field: 'pricing' };
   const targets = buildTargets(get('who'), get('where'));
-  if (!targets.length) return { error: 'Add at least one type of customer and one place.' };
+  if (!targets.length) return { error: 'Add at least one type of customer and one place.', field: 'who' };
 
   const objections = objectionPairs(get);
   const answers: Record<string, unknown> = Object.fromEntries(QUESTIONS.filter((q) => !q.pairs).map((q) => [q.key, get(q.key)]));

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
-type Result = { error?: string } | void;
+type Result = { error?: string; field?: string } | void;
 
 /**
  * A form that calls a server action and, when the action returns an error, shows it while
@@ -16,12 +16,28 @@ export default function ActionForm({
   children: React.ReactNode;
 }) {
   const [error, setError] = useState('');
+  const [field, setField] = useState('');
+  const [tries, setTries] = useState(0);
   const [pending, startTransition] = useTransition();
   const errorRef = useRef<HTMLParagraphElement>(null);
-  // Long forms submit from the bottom; bring the error into view so it is not missed.
-  useEffect(() => { if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [error]);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Long forms submit from the bottom: go to the field that needs fixing (or the message), every
+  // time, even when the message is the same as last time.
+  useEffect(() => {
+    if (!error) return;
+    formRef.current?.querySelectorAll('.invalid').forEach((el) => el.classList.remove('invalid'));
+    const input = field ? formRef.current?.querySelector<HTMLElement>(`[name="${field}"]`) : null;
+    if (input) {
+      input.classList.add('invalid');
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus({ preventScroll: true });
+    } else {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error, field, tries]);
   return (
     <form
+      ref={formRef}
       className={className}
       aria-busy={pending}
       onSubmit={(event) => {
@@ -32,11 +48,13 @@ export default function ActionForm({
         startTransition(async () => {
           const result = await action(data);
           setError(result?.error ?? '');
+          setField(result?.field ?? '');
+          setTries((n) => n + 1);
         });
       }}
     >
-      {error && <p ref={errorRef} className="error full" role="alert">{error}</p>}
       {children}
+      {error && <p ref={errorRef} className="error full" role="alert" style={{ marginTop: 8 }}>{error}</p>}
     </form>
   );
 }

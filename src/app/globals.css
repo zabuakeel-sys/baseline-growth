@@ -210,3 +210,4 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .steps li.now { border-color: var(--accent); border-width: 2px; font-weight: 600; }
 .pill.from-site { color: var(--accent); border-color: currentColor; font-weight: 400; }
 .pill.ask-owner { color: var(--warn); border-color: currentColor; font-weight: 400; }
+.invalid { outline: 2px solid var(--bad); outline-offset: 1px; }

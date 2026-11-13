@@ -6,8 +6,8 @@
 export const QUESTIONS = [
   { section: 'About them', key: 'name', ask: 'What is the business called?', why: 'Used in every message.', required: true },
   { section: 'About them', key: 'website', ask: 'What is your website?', why: 'Reps check it before calls.' },
-  { section: 'About them', key: 'contact_name', owner: true, ask: 'Who should we send interested customers to?', why: 'Introductions go to this person.', required: true },
-  { section: 'About them', key: 'contact_email', owner: true, ask: 'Their email?', why: 'Introductions are emailed here.', required: true },
+  { section: 'About them', key: 'contact_name', owner: true, ask: 'Who should we send interested customers to?', why: 'Introductions go to this person. Can wait until you are ready to hand customers over.' },
+  { section: 'About them', key: 'contact_email', owner: true, ask: 'Their email?', why: 'Introductions are emailed here.' },
   { section: 'About them', key: 'contact_phone', ask: 'Their phone?', why: 'For urgent hand-offs.' },
   { section: 'What they sell', key: 'offer', ask: 'In one sentence, what do you do for your customers?', why: 'Opens every email and call. Example: "We clean offices and medical buildings across Metro Detroit."', required: true },
   { section: 'What they sell', key: 'why_us', ask: 'Why do customers pick you over others? Give two or three reasons.', why: 'Goes into the script. One reason per line.', multiline: true, required: true },
@@ -101,6 +101,11 @@ export function buildScript({ name, offer, why_us, first_step, who, objections }
 
 /** Keys of the deal-term answers, kept as the owner's standard for new businesses. */
 export const TERM_KEYS = ['share_percent', 'share_months', 'signup_fee', 'monthly_fee'];
+
+/** Required answers still missing, as question objects (first one first). */
+export function missingQuestions(get) {
+  return QUESTIONS.filter((q) => q.required && !String(get(q.key) ?? '').trim());
+}
 
 /** Required answers still missing, as question texts. */
 export function missingAnswers(get) {
