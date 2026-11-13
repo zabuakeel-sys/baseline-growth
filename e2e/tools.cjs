@@ -15,11 +15,11 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await o.fill('input[name=email]', 'owner@example.test');
   await o.fill('input[name=password]', 'testpassword123');
   await o.click('button[type=submit]');
-  await o.waitForURL(base + '/today');
+  await o.waitForURL((u) => !u.pathname.startsWith('/login'));
   const ownerId = Number(psql("SELECT id FROM users WHERE email = 'owner@example.test'"));
 
   // Client setup: claim link, pricing, script with objection answers
-  await o.goto(base + '/');
+  await o.goto(base + '/clients');
   await o.click('table >> text=LibraPro Facility Services');
   await o.waitForSelector('#tools-h');
   const clientUrl = o.url().split('#')[0].split('?')[0];

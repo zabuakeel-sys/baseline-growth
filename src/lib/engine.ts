@@ -30,7 +30,7 @@ const nameOf = (from: string) => from.replace(/<.*>/, '').replace(/"/g, '').trim
 type DueLead = {
   id: number; email: string; phone: string; address: string; name: string; need: string; notes: string; rating: number | null; reviews: number | null;
   received_on: string; touches_sent: number; status: string; cadence_step: number; next_action_on: string | null; next_action: string;
-  client_id: number; client_name: string; offer: string; mailing_address: string; visits: boolean;
+  client_id: number; client_name: string; offer: string; mailing_address: string; visits: boolean; approved: boolean;
 };
 
 /**
@@ -40,7 +40,8 @@ type DueLead = {
 async function queueDue(settings: Settings) {
   const leads = (await query<DueLead>(
     `SELECT l.id, l.email, l.phone, l.address, l.name, l.need, l.notes, l.rating, l.reviews, l.received_on, l.touches_sent, l.status,
-        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits
+        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits,
+        c.outreach_approved_at IS NOT NULL AS approved
       FROM leads l JOIN clients c ON c.id = l.client_id
       WHERE l.status IN ('new', 'following_up') AND l.cadence_step < $1 AND c.status <> 'ended'`, [CADENCE.length])).rows;
   const now = today();
@@ -79,7 +80,7 @@ async function queueDue(settings: Settings) {
            VALUES ($1, $2, 'sequence', $3, $4, $5, $6, $7, $8, $9, CASE WHEN $8 = 'approved' THEN now() END)
            ON CONFLICT (lead_id, touch) DO NOTHING`,
           [l.id, l.client_id, step.index, l.touches_sent, l.email, subjectFor(l.client_name, l.touches_sent), body,
-            settings.auto_send ? 'approved' : 'pending', first?.message_id ?? null]);
+            settings.auto_send || l.approved ? 'approved' : 'pending', first?.message_id ?? null]);
         queued += r.rowCount ?? 0;
         break;
       }

@@ -175,3 +175,36 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
   .meter-fill.focus { background: #1f5fbf !important; }
   .meter-track { background: #e5e5e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Next up */
+.next-up { max-width: 760px; margin: 0 auto; }
+.next-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.segmented a { padding: 6px 12px; text-decoration: none; color: var(--ink); }
+.segmented a.on { background: var(--accent); color: var(--accent-ink); }
+.progress { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 12px 0 16px; }
+.progress > div { height: 100%; background: var(--good); }
+.up-card { padding: 20px; }
+.up-head { display: flex; justify-content: space-between; align-items: center; }
+.up-name { font-size: 26px; margin: 8px 0 2px; }
+.up-why { font-weight: 600; margin: 10px 0 14px; }
+.big-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.button.big { min-height: 52px; font-size: 17px; justify-content: center; text-align: center; }
+.what-happened { margin: 20px 0 8px; font-size: 17px; }
+.outcome-form { display: grid; gap: 10px; }
+.outcome-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.outcome-buttons button { min-height: 48px; justify-content: center; }
+.book { margin-top: 12px; }
+.small-link { font-size: 14px; }
+.pill.reason-replied { background: var(--good); color: #fff; border-color: var(--good); }
+.pill.reason-visit { border-color: var(--accent); color: var(--accent); }
+.done-card { text-align: center; padding: 32px 16px; }
+.meetings-today { border-color: var(--accent); }
+/* Home */
+.todo { list-style: none; margin: 0; padding: 0; }
+.todo li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.todo li:first-child { border-top: 0; }
+.todo .what { flex: 1 1 260px; }
+.steps { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0; margin: 0 0 16px; }
+.steps li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: var(--panel); }
+.steps li.done { border-color: var(--good); color: var(--good); }
+.steps li.now { border-color: var(--accent); border-width: 2px; font-weight: 600; }

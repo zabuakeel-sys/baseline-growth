@@ -16,16 +16,16 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
     await page.fill('input[name=email]', email);
     await page.fill('input[name=password]', pw);
     await page.click('button[type=submit]');
-    await page.waitForURL(base + '/today');
+    await page.waitForURL((u) => !u.pathname.startsWith('/login'));
   };
   const o = await (await browser.newContext({ viewport: { width: 1000, height: 900 }, deviceScaleFactor: 2 })).newPage();
   await login(o, 'owner@example.test', 'testpassword123');
 
   // Empty system: the checklist says what to do first
   await o.goto(base + '/');
-  const check = await o.textContent('section.checklist');
-  if (!check.includes('Add your first business') || !check.includes('Add a sales rep')) fail('checklist should list first steps');
-  if (!(await o.locator('li.done', { hasText: 'Connect business search' }).count())) fail('search is connected in this test');
+  const check = await o.textContent('section[aria-labelledby=todo-h]');
+  if (!check.includes('Add your first business')) fail('Home should say to add the first business');
+  if (check.includes('Connect business search')) fail('search is connected in this test');
 
   // Two reps
   for (const [name, email] of [['Rita Rep', 'rita@example.test'], ['Ben Rep', 'ben@example.test']]) {
@@ -84,6 +84,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   // Rita's Today: her 8, grouped by city, ready to call
   const r = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
   await login(r, 'rita@example.test', 'reppassword1');
+  await r.goto(base + '/today');
   const fresh = await r.textContent('section[aria-labelledby=new-h]');
   const cards = await r.locator('section[aria-labelledby=new-h] article.lead').count();
   console.log('rita today cards:', cards);
@@ -119,8 +120,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // Checklist moves on
   await o.goto(base + '/');
-  if (await o.locator('li:not(.done)', { hasText: 'Add your first business' }).count()) fail('first business should be ticked');
-  if (await o.locator('li:not(.done)', { hasText: 'Add a sales rep' }).count()) fail('rep should be ticked');
+  const home = await o.textContent('section[aria-labelledby=todo-h]');
+  if (home.includes('Add your first business') || home.includes('Add a sales rep')) fail('Home should move past the first steps');
   await o.screenshot({ path: S + '/27-home-checklist.png', fullPage: false });
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL CHECKS PASSED');

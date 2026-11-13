@@ -44,7 +44,7 @@ async function deliver(raw) {
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL(base + '/today');
+  await p.waitForURL((u) => !u.pathname.startsWith('/login'));
 
   const clientId = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
   psql(`UPDATE clients SET offer = 'LibraPro cleans offices and medical buildings across Metro Detroit.', mailing_address = '100 Example Ave, Detroit, MI 48201',

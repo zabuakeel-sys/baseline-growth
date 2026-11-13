@@ -3,8 +3,6 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { query } from '@/lib/db';
 import { requireOwner, requireUser } from '@/lib/auth';
-import { AREAS, buildPlan, scoreCheckup } from '@/lib/checkup';
-import type { Answers } from '@/lib/checkup';
 import { monthOf } from '@/lib/billing';
 import { parseDollarsToCents, parseWholeNumber } from '@/lib/money';
 
@@ -25,29 +23,6 @@ function refresh(clientId: number) {
   revalidatePath(`/clients/${clientId}`);
 }
 
-/** Turns a checkup's 90-day plan into tasks, due at the end of each plan month. Once per checkup. */
-export async function planToTasks(checkupId: number): Promise<Result> {
-  const user = await requireUser();
-  const { rows } = await query<{ client_id: number; conducted_on: string; answers: Answers; tasks_created_at: string | null }>(
-    'SELECT client_id, conducted_on, answers, tasks_created_at FROM checkups WHERE id = $1', [checkupId]);
-  const k = rows[0];
-  if (!k) return { error: 'That checkup no longer exists.' };
-  if (k.tasks_created_at) return { error: 'This plan is already in the task list.' };
-  const plan = buildPlan(scoreCheckup(k.answers).focus);
-  const items = plan.flatMap((m) => m.items.map((i) => ({ ...i, due: addDays(k.conducted_on, 30 * m.month) })));
-  if (!items.length) return { error: 'This checkup has no plan to add.' };
-  // Claim the checkup first so two quick clicks cannot add the plan twice.
-  const claim = await query('UPDATE checkups SET tasks_created_at = now() WHERE id = $1 AND tasks_created_at IS NULL', [checkupId]);
-  if (!claim.rowCount) return { error: 'This plan is already in the task list.' };
-  for (const i of items) {
-    await query(
-      'INSERT INTO tasks (client_id, checkup_id, title, area, assignee_id, due_on) VALUES ($1, $2, $3, $4, $5, $6)',
-      [k.client_id, checkupId, i.action, i.area, user.id, i.due],
-    );
-  }
-  refresh(k.client_id);
-  redirect(`/clients/${k.client_id}?saved=${encodeURIComponent(`${items.length} tasks added from the plan`)}#tasks-h`);
-}
 
 export async function addTask(clientId: number, formData: FormData): Promise<Result> {
   await requireUser();
@@ -58,7 +33,6 @@ export async function addTask(clientId: number, formData: FormData): Promise<Res
   if (!title) return { error: 'Write what needs doing.' };
   if (due && !DATE.test(due)) return { error: 'Due date must be a date.' };
   if (Number.isNaN(assignee)) return { error: 'Pick who does it.' };
-  if (area && !AREAS.some((a) => a.name === area)) return { error: 'Pick a valid area.' };
   await query('INSERT INTO tasks (client_id, title, area, assignee_id, due_on) VALUES ($1, $2, $3, $4, $5)',
     [clientId, title, area, assignee, due || null]);
   refresh(clientId);

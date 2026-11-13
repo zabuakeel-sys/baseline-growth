@@ -5,8 +5,30 @@ share of what those customers spend. The company name is set in `src/lib/config.
 
 ## How it works
 
-**Start here.** The home page lists what is still needed to run (business search key, outreach
-mailbox, a rep, each business's answers). **Add a business** shows the questions to ask the owner
+**The menu.** Owner: Home, Next up, Businesses, Team, Money. Reps: Next up, My prospects,
+Scoreboard. Everything else (all prospects, emails and replies, manual search, referral partners,
+insights) is linked from the Businesses page or shows up on Home when it needs a decision.
+
+**Home (owner).** One list of what needs you, in order, each with the button that deals with it:
+reply drafts to send, each business's next setup step (answers, mailbox, approve the first email),
+prospects to hand over after a held meeting, failed emails, reps with 5+ overdue calls, missing
+keys. Plus a button into your own Next up and the last 7 days' numbers.
+
+**Next up (everyone who sells).** One prospect at a time, picked in this order: people who
+replied, calls and visits due (most overdue first), then new prospects with a phone number nobody
+has called. The card has a big call button (and directions for visits), "Listen and coach me" (the
+live call assistant), the opening line, what we know, and the full script. Tap what happened (no
+answer, voicemail, gatekeeper, talked, signed up, not interested, wrong number, or book a
+meeting) and the next prospect comes up; the system sets the next step itself. "Skip for now"
+sends one to the back. Meetings show at the top, with Held / No-show once their time has passed;
+each sets the obvious next step. The owner sees their own prospects plus unassigned ones, with
+"Everyone" to see the whole team's. Order rules in `src/lib/queue.js`.
+
+**Approve once.** A business's emails wait for approval until the owner reads its first email
+(on Home or the business page) and presses "Looks good, start sending". From then on its schedule
+sends on its own. "Pause" puts it back to approving each email. Reply drafts always need approval.
+
+**Setting up a business.** **Add a business** shows the questions to ask the owner
 (what they sell, best customer types, places served, what a customer is worth, how customers
 start, why people pick them, common objections and answers, pricing, the deal terms) and builds
 from the answers: the offer line, the sales script, and a search for every customer type in every
@@ -15,7 +37,7 @@ are due (never-run first, each refreshed after 30 days, within the daily Google 
 on the Outbox page), adds businesses with a fit score of 60+ and contact details, up to the daily
 number per business and never more than two days' worth untouched, splits them among reps by
 lightest load (owners if there are no reps), and the outbox queues their first emails. Reps open
-Today and work the list. Rules in `src/lib/onboarding.js` and `src/lib/autopilot.js`.
+Next up and work it. Rules in `src/lib/onboarding.js` and `src/lib/autopilot.js`.
 
 
 0. **Find.** For each client, save what kind of business to look for and where ("independent
@@ -71,8 +93,7 @@ objections. The rep can also type what was said. Speech recognition needs a brow
 it (Chrome works best).
 
 Also: anyone marked "asked not to be contacted" can never be added again, for any client.
-"This week" lists other tasks. The Revenue Checkup (15 questions, five areas) is an optional
-tool for understanding a new client before agreeing terms.
+"This week" lists other tasks.
 
 **The mixed schedule.** Each prospect walks seven steps from the day they were added: email
 (day 0), call (day 1), email (day 3), visit (day 5), email (day 7), call (day 10), email (day 14).
@@ -129,9 +150,9 @@ lawyer's sign-off.
 ## Tests
 
     # Browser tests other than autopilot expect e2e/fixtures.sql loaded after seeding.
-    npm test                    # money rules, outreach schedule and messages, checkup scoring
+    npm test                    # money rules, outreach schedule and messages
     node e2e/model.cjs          # full browser run against http://localhost:3100 (needs Playwright
-    node e2e/checkup.cjs        # and a freshly migrated + seeded database, owner password
+                                # and a freshly migrated + seeded database, owner password
                                 # testpassword123 for owner@example.test)
     node e2e/smtp-capture.cjs & # mail test: SMTP capture on :2525 plus a local IMAP server
     node e2e/mail.cjs           # (user outreach / testpass on :1143); app started with the SMTP_*,
@@ -144,6 +165,7 @@ lawyer's sign-off.
     node e2e/autopilot.cjs      # empty system -> questions -> autopilot -> reps' Today (no fixtures)
     node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
+    node e2e/nextup.cjs         # Home to-do list, approve once, Next up queue (APP_SECRET, OUTREACH_BACKGROUND=off)
     node e2e/schedule.cjs       # business mailbox, mixed schedule, logo, AI first line and reply drafts.
                                 # App started WITHOUT SMTP_/IMAP_, with APP_SECRET, ANTHROPIC_API_KEY=test-key,
                                 # ANTHROPIC_BASE_URL=http://localhost:3300, OUTREACH_BACKGROUND=off,

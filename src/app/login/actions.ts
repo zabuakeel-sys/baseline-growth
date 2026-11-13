@@ -8,5 +8,5 @@ export async function login(_prev: { error?: string; email?: string }, formData:
   const user = await verifyLogin(email, password);
   if (!user) return { error: 'That email and password do not match.', email };
   await startSession(user.id);
-  redirect('/today');
+  redirect(user.role === 'owner' ? '/' : '/next');
 }

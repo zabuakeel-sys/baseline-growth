@@ -43,7 +43,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 
       {tasks.length === 0 && (
         <div className="card"><p className="muted" style={{ margin: 0 }}>
-          Nothing open. Run a checkup with a client and add its plan to the task list.
+          Nothing open.
         </p></div>
       )}
       {late.length > 0 && <section className="card"><h2>Late</h2><TaskList tasks={late} back={back} showClient today={now} /></section>}

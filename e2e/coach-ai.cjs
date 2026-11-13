@@ -14,7 +14,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL(base + '/today');
+  await p.waitForURL((u) => !u.pathname.startsWith('/login'));
   const clientId = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
   psql(`INSERT INTO leads (client_id, name, phone, received_on) VALUES (${clientId}, 'Coach Test Co', '1', CURRENT_DATE)`);
   const id = psql("SELECT id FROM leads WHERE name = 'Coach Test Co'");

@@ -2,8 +2,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { getClient } from '@/lib/clients';
-import { listCheckups } from '@/lib/checkups';
-import { AREAS, scoreCheckup } from '@/lib/checkup';
 import { formatCents } from '@/lib/money';
 import { addMonths, inShareWindow, monthOf, shareCents } from '@/lib/billing';
 import { clientStatement, clientTasks, listUsers, monthLabel, today } from '@/lib/work';
@@ -19,6 +17,8 @@ import { query } from '@/lib/db';
 import { placesConfigured } from '@/lib/places';
 import ClientForm from '../ClientForm';
 import MailboxPanel from '../MailboxPanel';
+import ApprovePanel from '../ApprovePanel';
+import { setupSteps } from '@/lib/setup';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
 import LeadCard from '../../leads/LeadCard';
@@ -41,8 +41,8 @@ export default async function ClientPage({
   const found = await getClient(id);
   if (!found) notFound();
   const { client } = found;
-  const [checkups, tasks, users, leads, { customers, revenue }] = await Promise.all([
-    listCheckups(id), clientTasks(id), listUsers(), clientLeads(id), clientCustomers(id),
+  const [tasks, users, leads, { customers, revenue }] = await Promise.all([
+    clientTasks(id), listUsers(), clientLeads(id), clientCustomers(id),
   ]);
   const money = isOwner ? await clientStatement(client) : [];
   const targets = (await query<{ id: number; what: string; location: string; last_run_at: string | null; last_found: number | null }>(
@@ -58,6 +58,7 @@ export default async function ClientPage({
   const closedProspects = leads.filter((l) => l.status === 'lost' || l.status === 'opted_out');
   const stats = leadStats(leads);
   const back = `/clients/${id}#leads-h`;
+  const steps = isOwner ? await setupSteps(client) : null;
   const terms = [
     client.share_percent > 0 && `${client.share_percent}% of what each customer we bring pays${client.share_months ? ` for ${client.share_months} months` : ', for as long as they stay'}`,
     client.signup_fee_cents > 0 && `${formatCents(client.signup_fee_cents)} per new customer`,
@@ -66,13 +67,31 @@ export default async function ClientPage({
 
   return (
     <>
-      <p><Link href="/">Back to clients</Link></p>
+      <p><Link href="/clients">Back to businesses</Link></p>
       <h1>{client.name}</h1>
       <p className="sub">
         {client.industry || 'No industry set'}
         {isOwner && terms && <> · {terms}</>}
       </p>
       {saved && <p className="notice" role="status">{saved}.</p>}
+      {isOwner && steps && (
+        <ol className="steps" aria-label="Setup">
+          {steps.map((st, i) => {
+            const now = !st.done && steps.slice(0, i).every((x) => x.done);
+            return (
+              <li key={st.key} className={st.done ? 'done' : now ? 'now' : ''}>
+                {st.done ? '✓ ' : `${i + 1}. `}{now && st.key !== 'live' && st.key !== 'approve' ? <Link href={st.href}>{st.label}</Link> : st.label}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {isOwner && steps && steps[0].done && steps[1].done && (
+        <section className="card" aria-labelledby="approve-h">
+          <h2 id="approve-h">Outreach email</h2>
+          <ApprovePanel client={client} back={`/clients/${id}#approve-h`} />
+        </section>
+      )}
 
       <section className="card" aria-labelledby="autopilot-h">
         <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
@@ -247,28 +266,6 @@ export default async function ClientPage({
         </section>
       )}
 
-      <section className="card" aria-labelledby="checkups-h">
-        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-          <h2 id="checkups-h" style={{ margin: 0 }}>Revenue Checkups</h2>
-          <Link className="button secondary" href={`/clients/${id}/checkup`}>Start checkup</Link>
-        </div>
-        <p className="muted" style={{ marginTop: 0 }}>Optional: use with a new client to see where their business is weakest before you agree terms.</p>
-        {checkups.length > 0 && (
-          <ul className="plain-list">
-            {checkups.map((k) => {
-              const { focus, overall } = scoreCheckup(k.answers);
-              const names = focus.map((f) => AREAS.find((a) => a.key === f)!.name.toLowerCase());
-              return (
-                <li key={k.id}>
-                  <Link href={`/checkups/${k.id}`}>{k.conducted_on}</Link>
-                  {' · '}{names.length ? `Weakest: ${names.join(' and ')}` : 'No single weak area'}
-                  <span className="muted"> · overall {overall}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
 
       <section className="card" aria-labelledby="script-h">
         <h2 id="script-h">Sales script</h2>

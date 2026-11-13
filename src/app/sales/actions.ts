@@ -97,7 +97,14 @@ export async function setMeetingStatus(meetingId: number, status: string, back: 
   await requireUser();
   if (!['held', 'no_show', 'cancelled', 'scheduled'].includes(status)) return;
   const { rows } = await query<{ client_id: number }>(
-    'UPDATE meetings m SET status = $2 FROM leads l WHERE m.id = $1 AND l.id = m.lead_id RETURNING l.client_id', [meetingId, status]);
+    'UPDATE meetings m SET status = $2 FROM leads l WHERE m.id = $1 AND l.id = m.lead_id RETURNING l.client_id, l.id AS lead_id', [meetingId, status]);
+  // The next step after a meeting is obvious, so set it: it puts the prospect back in Next up.
+  const next = status === 'held' ? 'After the meeting: hand them to the business, or sign them up'
+    : status === 'no_show' ? 'Missed the meeting: call to rebook' : '';
+  if (next && rows[0]) {
+    await query("UPDATE leads SET next_action_on = $2, next_action = $3 WHERE id = $1 AND status NOT IN ('won', 'lost', 'opted_out')",
+      [(rows[0] as unknown as { lead_id: number }).lead_id, today(), next]);
+  }
   refresh(rows[0]?.client_id);
   redirect(withSaved(back, 'Meeting updated'));
 }
@@ -138,4 +145,19 @@ export async function setCommission(userId: number, formData: FormData): Promise
   revalidatePath('/team');
   revalidatePath('/scoreboard');
   redirect('/team?saved=1');
+}
+
+/** From Next up: records the call or visit that booked the meeting, then books it. */
+export async function bookFromQueue(leadId: number, back: string, channel: string, formData: FormData): Promise<Result> {
+  const user = await requireUser();
+  const date = String(formData.get('date') ?? '').trim();
+  const time = String(formData.get('time') ?? '').trim();
+  if (!DATE.test(date) || !/^\d{2}:\d{2}$/.test(time)) return { error: 'Pick the day and time of the meeting.' };
+  if (date < today()) return { error: 'The meeting date is in the past.' };
+  const lead = (await query<{ status: string }>('SELECT status FROM leads WHERE id = $1', [leadId])).rows[0];
+  if (!lead) return { error: 'That prospect no longer exists.' };
+  if (lead.status === 'opted_out') return { error: 'This prospect asked not to be contacted.' };
+  await query('INSERT INTO activities (lead_id, user_id, channel, outcome, notes) VALUES ($1, $2, $3, $4, $5)',
+    [leadId, user.id, channel === 'visit' ? 'visit' : 'call', 'meeting_booked', '']);
+  return bookMeeting(leadId, back, formData);
 }

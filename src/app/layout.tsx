@@ -13,18 +13,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {user && (
           <header className="top">
-            <Link href="/" className="brand">{APP_NAME}</Link>
+            <Link href={user.role === 'owner' ? '/' : '/next'} className="brand">{APP_NAME}</Link>
             <nav>
-              <Link href="/today">Today</Link>
-              <Link href="/">Clients</Link>
-              {user.role === 'owner' && <Link href="/find">Find</Link>}
-              <Link href="/leads">Prospects</Link>
-              {user.role === 'owner' && <Link href="/outbox">Outbox</Link>}
-              <Link href="/partners">Partners</Link>
-              {user.role === 'owner' && <Link href="/insights">Insights</Link>}
-              <Link href="/scoreboard">Scoreboard</Link>
+              {user.role === 'owner' && <Link href="/">Home</Link>}
+              <Link href="/next">Next up</Link>
+              {user.role === 'owner' ? <Link href="/clients">Businesses</Link> : <Link href="/leads">My prospects</Link>}
+              <Link href={user.role === 'owner' ? '/team' : '/scoreboard'}>{user.role === 'owner' ? 'Team' : 'Scoreboard'}</Link>
               {user.role === 'owner' && <Link href="/money">Money</Link>}
-              {user.role === 'owner' && <Link href="/team">Team</Link>}
             </nav>
             <span className="who">{user.name}</span>
             <form action="/logout" method="post"><button className="secondary" type="submit">Log out</button></form>

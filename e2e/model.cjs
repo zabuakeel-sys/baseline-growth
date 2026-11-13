@@ -11,7 +11,7 @@ const base = 'http://localhost:3100';
     await page.fill('input[name=email]', email);
     await page.fill('input[name=password]', pw);
     await page.click('button[type=submit]');
-    await page.waitForURL(base + '/today'); await page.goto(base + '/');
+    await page.waitForURL((u) => !u.pathname.startsWith('/login')); await page.goto(base + '/clients');
   };
   // Anonymous visitors are sent to login
   const anon = await browser.newPage();
@@ -128,10 +128,11 @@ const base = 'http://localhost:3100';
   console.log('opted out:', await p.textContent('p.error'));
 
   // Dashboard counts
-  await p.goto(base + '/');
-  const dash = (await p.textContent('.stats')).replace(/\s+/g, ' ');
-  console.log('dashboard:', dash);
-  if (!dash.includes('Prospects in play1') || !dash.includes('Customers we brought1')) fail('dashboard counts wrong');
+  await p.goto(base + '/clients');
+  const dash = (await p.textContent('table')).replace(/\s+/g, ' ');
+  console.log('businesses:', dash);
+  const cells = await p.locator('tr', { hasText: 'LibraPro Facility Services' }).locator('td.num').allTextContents();
+  if (cells[0] !== '1' || cells[2] !== '1') fail(`business counts wrong: ${cells}`);
 
   // Team member: no money anywhere, cannot change a confirmed amount
   await p.goto(base + '/team');

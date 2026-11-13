@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { hashPassword, requireOwner } from '@/lib/auth';
@@ -36,7 +37,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   );
   return (
     <>
-      <h1>Team</h1>
+      <div className="actions" style={{ justifyContent: 'space-between' }}><h1>Team</h1><Link className="button secondary" href="/scoreboard">Scoreboard and commission</Link></div>
       <p className="sub">Team members can run clients and record baselines. Only owners see deal terms and money.</p>
       <div className="card table-wrap">
         <table>
