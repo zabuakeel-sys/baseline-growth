@@ -11,7 +11,7 @@ const base = 'http://localhost:3100';
     await page.fill('input[name=email]', email);
     await page.fill('input[name=password]', pw);
     await page.click('button[type=submit]');
-    await page.waitForURL(base + '/');
+    await page.waitForURL(base + '/today'); await page.goto(base + '/');
   };
   // Anonymous visitors are sent to login
   const anon = await browser.newPage();

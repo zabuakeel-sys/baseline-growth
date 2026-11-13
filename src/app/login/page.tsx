@@ -4,7 +4,7 @@ import { currentUser } from '@/lib/auth';
 import LoginForm from './LoginForm';
 
 export default async function LoginPage() {
-  if (await currentUser()) redirect('/');
+  if (await currentUser()) redirect('/today');
   return (
     <div className="login card">
       <h1>{APP_NAME}</h1>

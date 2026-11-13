@@ -104,11 +104,11 @@ export async function reviewCandidates(formData: FormData): Promise<Result> {
       `SELECT 1 FROM leads WHERE status = 'opted_out' AND ((email <> '' AND email = $1) OR (phone <> '' AND regexp_replace(phone, '\\D', '', 'g') = regexp_replace($2, '\\D', '', 'g')))`,
       [c.email, c.phone]);
     if (optedOut.rowCount) { blocked++; await query("UPDATE candidates SET status = 'skipped' WHERE id = $1", [c.id]); continue; }
-    const notes = [c.about, c.website, c.address].filter(Boolean).join('\n');
+    const notes = [c.about, c.website].filter(Boolean).join('\n');
     const lead = await query<{ id: number }>(
-      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id)
-       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7) RETURNING id`,
-      [c.client_id, c.name, c.phone, c.email, notes, today(), user.id]);
+      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address)
+       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8) RETURNING id`,
+      [c.client_id, c.name, c.phone, c.email, notes, today(), user.id, c.address]);
     await query("UPDATE candidates SET status = 'added', lead_id = $2 WHERE id = $1", [c.id, lead.rows[0].id]);
     added++;
   }

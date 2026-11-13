@@ -51,7 +51,18 @@ export function needsDecision(lead) {
   return (lead.status === 'new' || lead.status === 'following_up') && lead.touches_sent >= SCHEDULE_DAYS.length;
 }
 
-const firstName = (name) => (String(name || '').trim().split(/\s+/)[0] || 'there');
+// Words that mark a business name rather than a person, so "Tower Dental" is greeted "Hi there".
+const BUSINESS = /\b(inc|llc|ltd|co|corp|company|group|services?|dental|clinic|medical|auto|automotive|repair|shop|garage|motors?|offices?|center|centre|plaza|tower|properties|property|management|cleaning|care|studio|salon|restaurant|cafe|bar|church|school|academy|hotel|detail(ing)?|tire|body|collision|glass|mechanics?|partners|associates|&)\b/i;
+
+/** "Pat Lee" -> "Pat"; anything that does not look like a person's name -> "there". */
+export function greetingName(name) {
+  const n = String(name || '').trim();
+  const words = n.split(/\s+/);
+  const person = words.length >= 1 && words.length <= 3 && !BUSINESS.test(n) && !/\d/.test(n)
+    && words.every((w) => /^[A-Z][A-Za-z'.-]+$/.test(w) && /[a-z]/.test(w));
+  return person ? words[0] : 'there';
+}
+const firstName = greetingName;
 
 /** Lower-cases a leading word so it reads mid-sentence; acronyms like "HVAC" stay as typed. */
 const midSentence = (text) => {

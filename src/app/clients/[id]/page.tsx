@@ -12,6 +12,7 @@ import { leadStats } from '@/lib/followup';
 import { updateClient } from '../actions';
 import { addTask } from '../../work/actions';
 import { addLead, saveCustomerRevenue } from '../../leads/actions';
+import { saveScript } from '../../sales/actions';
 import ClientForm from '../ClientForm';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
@@ -229,6 +230,19 @@ export default async function ClientPage({
             })}
           </ul>
         )}
+      </section>
+
+      <section className="card" aria-labelledby="script-h">
+        <h2 id="script-h">Sales script</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          What reps say on the phone and at the door for {client.name}. It shows on every prospect card.
+        </p>
+        <ActionForm action={saveScript.bind(null, id)}>
+          <label>Script
+            <textarea name="call_script" defaultValue={client.call_script} rows={10} placeholder={`Opening: Hi, this is [name] calling for ${client.name}. Do you have 30 seconds?\n\nQuestions:\n- Who handles ... today?\n- What would you change about it?\n\nIf they say "we're all set": ...\nIf they say "send me something": ...\n\nAsk for: a 15-minute walkthrough this week.`} />
+          </label>
+          <div className="actions" style={{ marginTop: 8 }}><button type="submit">Save script</button></div>
+        </ActionForm>
       </section>
 
       <section className="card" aria-labelledby="details-h">

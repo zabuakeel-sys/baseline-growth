@@ -124,10 +124,37 @@ async function readReplies() {
         "UPDATE leads SET status = 'lost', lost_reason = 'Not interested', closed_on = $2 WHERE id = $1 AND status IN ('new', 'following_up', 'talking')",
         [leadId, today()]);
     } else {
-      await query("UPDATE leads SET status = 'talking' WHERE id = $1 AND status IN ('new', 'following_up')", [leadId]);
+      await query(
+        `UPDATE leads SET status = CASE WHEN status IN ('new', 'following_up') THEN 'talking' ELSE status END,
+           next_action_on = $2, next_action = 'They replied: call them now' WHERE id = $1`, [leadId, today()]);
+      await alertRep(leadId, m.text).catch((err) => console.error('reply alert failed:', err));
     }
   }
   return { read, note: '' };
+}
+
+/**
+ * Emails the assigned rep (or every owner, if nobody is assigned) the moment a prospect replies.
+ * A reply answered within the hour is worth far more than one answered tomorrow.
+ */
+async function alertRep(leadId: number, replyText: string) {
+  if (!mailStatus().send) return;
+  const l = (await query<{ name: string; phone: string; email: string; client_name: string; client_id: number; assignee_email: string | null }>(
+    `SELECT l.name, l.phone, l.email, c.name AS client_name, c.id AS client_id, u.email AS assignee_email
+     FROM leads l JOIN clients c ON c.id = l.client_id LEFT JOIN users u ON u.id = l.assignee_id WHERE l.id = $1`, [leadId])).rows[0];
+  if (!l) return;
+  const to = l.assignee_email
+    ? [l.assignee_email]
+    : (await query<{ email: string }>("SELECT email FROM users WHERE role = 'owner'")).rows.map((r) => r.email);
+  if (!to.length) return;
+  const said = replyText.split(/\n\s*On .+wrote:|\n>/)[0].trim().slice(0, 1000);
+  await sendMail({
+    to: to.join(', '),
+    subject: `Reply from ${l.name} (${l.client_name}): call them now`,
+    text: [`${l.name} replied to outreach for ${l.client_name}.`, '', said, '', l.phone && `Phone: ${l.phone}`, l.email && `Email: ${l.email}`,
+      '', 'Call within the hour if you can. Log the call in the system when you are done.']
+      .filter((x): x is string => typeof x === 'string').join('\n').replace(/\n{3,}/g, '\n\n'),
+  });
 }
 
 export type RunReport = { queued: number; sent: number; failed: number; read: number; notes: string[] };

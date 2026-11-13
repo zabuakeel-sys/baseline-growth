@@ -5,6 +5,7 @@ import { markCustomer, markIntroduced, markLost, markOptedOut, markReplied, mark
 import ActionForm from '../ActionForm';
 import CopyButton from './CopyButton';
 import { handOverLead } from '../outbox/actions';
+import SalesTools from '../sales/SalesTools';
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -17,7 +18,8 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
   const closed = lead.status === 'won' || lead.status === 'lost' || lead.status === 'opted_out';
   const touch = lead.touches_sent;
   const due = reaching ? nextDue(lead.received_on, touch) : null;
-  const message = reaching && touch < SCHEDULE_DAYS.length
+  // Only prospects with an email get an email draft; phone-only ones are worked by calls and visits.
+  const message = reaching && lead.email && touch < SCHEDULE_DAYS.length
     ? messageFor(touch, {
         leadName: lead.name, clientName: lead.client_name, offer: lead.client_offer,
         need: lead.need, senderName, address: lead.client_address,
@@ -91,6 +93,7 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
         <p className="task-meta"><strong>Every message was sent with no reply.</strong> Mark it lost, or keep going by phone.</p>
       )}
 
+      {!closed && <SalesTools lead={lead} back={back} today={today} />}
       {!closed && (
         <div className="actions lead-actions">
           {reaching && <form action={markReplied.bind(null, lead.id, back)}><button type="submit" className="secondary">They replied</button></form>}

@@ -9,7 +9,7 @@ const base = 'http://localhost:3100';
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL(base + '/');
+  await p.waitForURL(base + '/today'); await p.goto(base + '/');
   await p.goto(base + '/find');
   if (await p.locator('text=Business search is not connected yet').count()) fail('should show as connected');
   await p.selectOption('select[name=client_id]', { label: 'AutoAt' });

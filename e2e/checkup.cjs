@@ -11,7 +11,7 @@ const base = 'http://localhost:3100';
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL(base + '/');
+  await p.waitForURL(base + '/today'); await p.goto(base + '/');
 
   await p.click('text=AutoAt');
   await p.waitForSelector('#checkups-h');
@@ -56,7 +56,7 @@ const base = 'http://localhost:3100';
   await m.fill('input[name=email]', 'owner@example.test');
   await m.fill('input[name=password]', 'testpassword123');
   await m.click('button[type=submit]');
-  await m.waitForURL(base + '/');
+  await m.waitForURL(base + '/today'); await m.goto(base + '/');
   await m.goto(clientUrl + '/checkup');
   await m.check('input[name=found_0][value="3"]', { force: true });
   const overflow = await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);

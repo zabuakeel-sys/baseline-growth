@@ -8,7 +8,7 @@ export type Client = {
   id: number; name: string; industry: string; website: string;
   contact_name: string; contact_email: string; contact_phone: string;
   status: Status; monthly_fee_cents: number; bonus_percent: number;
-  share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string;
+  share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string; call_script: string;
   contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 

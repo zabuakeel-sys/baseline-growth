@@ -118,6 +118,21 @@ header.top nav { flex-wrap: wrap; row-gap: 4px; }
 code { font-size: 13px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
 .reply-text { white-space: pre-wrap; margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--bg); font-size: 14px; }
 blockquote.reply-text .task-meta { display: block; margin-bottom: 4px; }
+.sales-tools { margin-top: 10px; display: grid; gap: 6px; }
+.sales-tools details > summary { font-size: 14px; }
+.next-step { margin: 0; font-weight: 600; font-size: 14px; }
+.next-step.late { color: var(--bad); }
+.log-form { display: grid; gap: 10px; margin-top: 8px; }
+.segmented-radio { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.outcome-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; }
+.meetings, .history { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.meetings li, .history li { padding: 4px 0; }
+.inline-actions { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
+button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.card.urgent { border-color: var(--bad); border-width: 2px; }
+.total-row td { font-weight: 700; border-top: 2px solid var(--line); }
+.inline-form { display: flex; gap: 6px; align-items: center; }
+.inline-form input { min-height: 36px; padding: 6px 8px; }
 @media print {
   header.top, .no-print { display: none !important; }
   body { background: #fff; color: #000; }

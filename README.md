@@ -27,6 +27,18 @@ share of what those customers spend. The company name is set in `src/lib/config.
    due the 15th of the next month and shows as late after that. The rules live in
    `src/lib/billing.js`, tested in `tests/billing.test.mjs`.
 
+**Sales team.** Each rep logs in to **Today**: replies waiting (call now), callbacks and next steps
+due, meetings today and tomorrow, then fresh prospects grouped by city for calling or visiting.
+On every prospect a rep logs a call, visit, email or LinkedIn touch with an outcome (no answer,
+voicemail, gatekeeper, talked, meeting booked, signed, not interested, wrong contact); the outcome
+moves the prospect along and sets a default next step, and any real conversation stops queued
+emails. Meetings are booked with a time and marked held, no-show or cancelled. Each client has a
+sales script shown on its prospect cards. When a prospect replies by email, the assigned rep (or
+the owners) is emailed at once. **Scoreboard** shows calls, visits, conversations, meetings booked
+and held, and customers per rep; commission is each rep's percent (set on Team) of what the
+company has earned on customers they won, counting only client-confirmed amounts. Rules in
+`src/lib/sales.js`.
+
 Also: anyone marked "asked not to be contacted" can never be added again, for any client.
 "This week" lists other tasks. The Revenue Checkup (15 questions, five areas) is an optional
 tool for understanding a new client before agreeing terms.
@@ -68,6 +80,7 @@ lawyer's sign-off.
                                 # IMAP_* and OUTREACH_FROM settings, OUTREACH_BACKGROUND=off and
                                 # OUTREACH_IGNORE_HOURS=1
     node e2e/mock-google.cjs &  # stand-in for Google Places on :3200, then start the app with
+    node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
 
 ## Deploy on Railway

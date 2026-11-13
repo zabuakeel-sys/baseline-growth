@@ -36,6 +36,7 @@ export async function addLead(clientId: number, back: string, formData: FormData
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const source = String(formData.get('source') ?? '').trim();
   const need = String(formData.get('need') ?? '').trim();
+  const address = String(formData.get('address') ?? '').trim().slice(0, 300);
   const assignee = parseWholeNumber(formData.get('assignee_id'));
   const client = await query('SELECT 1 FROM clients WHERE id = $1', [clientId]);
   if (!client.rowCount) return { error: 'That client no longer exists.' };
@@ -56,9 +57,9 @@ export async function addLead(clientId: number, back: string, formData: FormData
     if (dup.rowCount) return { error: `${name} is already on this client's list.` };
   }
   await query(
-    `INSERT INTO leads (client_id, name, phone, email, source, need, received_on, assignee_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [clientId, name, phone, email, source, need, today(), assignee],
+    `INSERT INTO leads (client_id, name, phone, email, source, need, received_on, assignee_id, address)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [clientId, name, phone, email, source, need, today(), assignee, address],
   );
   refresh(clientId);
   redirect(withSaved(back, `${name} added`));
@@ -95,13 +96,13 @@ export async function markIntroduced(leadId: number, back: string, formData: For
 
 /** The client confirms they bought: from this month on, we share in what they pay. */
 export async function markCustomer(leadId: number, back: string, formData: FormData): Promise<Result> {
-  await requireUser();
+  const user = await requireUser();
   const since = String(formData.get('customer_since') ?? '').trim();
   if (!DATE.test(since) || since > today()) return { error: 'Pick the date they became a customer, today or earlier.' };
   const row = await update(
     `UPDATE leads SET status = 'won', customer_since = $2, closed_on = $2, lost_reason = '',
-       introduced_on = COALESCE(introduced_on, $2)
-     WHERE id = $1 AND status IN ('new', 'following_up', 'talking', 'introduced') RETURNING client_id`, [leadId, since]);
+       introduced_on = COALESCE(introduced_on, $2), won_by = COALESCE(assignee_id, $3), next_action_on = NULL, next_action = ''
+     WHERE id = $1 AND status IN ('new', 'following_up', 'talking', 'introduced') RETURNING client_id`, [leadId, since, user.id]);
   if (!row) return { error: 'This prospect is already closed.' };
   redirect(withSaved(back, 'New customer recorded'));
 }

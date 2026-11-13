@@ -21,6 +21,7 @@ export default function AddLeadForm({ action, users, defaultAssignee, clients }:
       <label>Name or business<input name="name" required /></label>
       <label>Phone<input name="phone" type="tel" /></label>
       <label>Email<input name="email" type="email" /></label>
+      <label>Address (for visits)<input name="address" placeholder="Street, city, state" /></label>
       <label>Found through
         <select name="source" defaultValue="">
           <option value="">Not sure</option>

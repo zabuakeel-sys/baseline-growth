@@ -39,6 +39,9 @@ test('every message names the client, signs on its behalf and offers an opt-out 
   }
   assert.match(all[0], /free to join\. I thought it could help with empty bays on weekdays\./);
   assert.match(messageFor(0, { clientName: 'LibraPro' }), /^Hi there,[\s\S]*I work with LibraPro\./);
+  for (const business of ['Tower Dental', "Al Dean's Auto Repair", 'Maple Offices', 'A2Z Complete Car Care', 'GREENFIELD LLC'])
+    assert.match(messageFor(0, { ...ctx, leadName: business }), /^Hi there,/, business);
+  assert.match(messageFor(0, { ...ctx, leadName: "Mary O'Brien" }), /^Hi Mary,/);
   assert.match(messageFor(0, { clientName: 'X', need: 'HVAC work' }), /help with HVAC work\./);
 });
 

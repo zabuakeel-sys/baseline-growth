@@ -15,11 +15,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <header className="top">
             <Link href="/" className="brand">{APP_NAME}</Link>
             <nav>
+              <Link href="/today">Today</Link>
               <Link href="/">Clients</Link>
               <Link href="/find">Find</Link>
               <Link href="/leads">Prospects</Link>
               <Link href="/outbox">Outbox</Link>
-              <Link href="/work">This week</Link>
+              <Link href="/scoreboard">Scoreboard</Link>
               {user.role === 'owner' && <Link href="/money">Money</Link>}
               {user.role === 'owner' && <Link href="/team">Team</Link>}
             </nav>

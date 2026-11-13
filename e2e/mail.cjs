@@ -31,7 +31,7 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL(base + '/');
+  await p.waitForURL(base + '/today'); await p.goto(base + '/');
 
   // Client setup: offer, contact email; leave the address out at first
   await p.click('text=LibraPro Facility Services');
@@ -96,6 +96,12 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   console.log('states:', state);
   for (const want of ['Ann Able=talking', 'Bob Baker=opted_out', 'Cy Cole=following_up', 'Di Dunn=lost:Email bounced']) if (!state.includes(want)) fail('expected ' + want);
   if (!(await p.locator('text=no matching prospect').count())) fail('stranger email should be listed as unmatched');
+  const alert = sent().find((m) => m.subject.startsWith('Reply from Ann Able'));
+  if (!alert) fail('no reply alert to the rep');
+  else if (!alert.to.includes('owner@example.test') || !alert.text.includes('Call me Thursday at 2.')) fail('reply alert content wrong');
+  await p.goto(base + '/today?who=all');
+  if (!(await p.locator('section[aria-labelledby=replied-h]').textContent()).includes('Ann Able')) fail('Ann should top the Today list');
+  await p.goto(base + '/outbox');
   await p.screenshot({ path: S + '/20-replies.png', fullPage: true });
 
   // Ann's card shows her words; hand her to the client

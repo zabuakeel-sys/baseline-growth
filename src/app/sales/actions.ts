@@ -1,0 +1,133 @@
+'use server';
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { query } from '@/lib/db';
+import { requireOwner, requireUser } from '@/lib/auth';
+import { CHANNELS, OUTCOMES, applyOutcome } from '@/lib/sales';
+import { parsePercent, parseWholeNumber } from '@/lib/money';
+import { today } from '@/lib/work';
+
+type Result = { error?: string };
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/today');
+const withSaved = (back: string, msg: string) => {
+  const [path, hash] = safe(back).split('#');
+  return `${path}${path.includes('?') ? '&' : '?'}saved=${encodeURIComponent(msg)}${hash ? `#${hash}` : ''}`;
+};
+const refresh = (clientId?: number) => {
+  for (const p of ['/today', '/leads', '/scoreboard', '/money']) revalidatePath(p);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+};
+
+/** Logs a call, visit, email or LinkedIn touch with its outcome, and moves the prospect along. */
+export async function logActivity(leadId: number, back: string, formData: FormData): Promise<Result> {
+  const user = await requireUser();
+  const channel = String(formData.get('channel') ?? '');
+  const outcome = String(formData.get('outcome') ?? '');
+  const notes = String(formData.get('notes') ?? '').trim();
+  const nextOn = String(formData.get('next_action_on') ?? '').trim();
+  const nextAction = String(formData.get('next_action') ?? '').trim();
+  if (!(channel in CHANNELS)) return { error: 'Pick how you reached them.' };
+  if (!(outcome in OUTCOMES)) return { error: 'Pick what happened.' };
+  if (nextOn && !DATE.test(nextOn)) return { error: 'Next step date must be a date.' };
+  const lead = (await query<{ client_id: number; status: string }>('SELECT client_id, status FROM leads WHERE id = $1', [leadId])).rows[0];
+  if (!lead) return { error: 'That prospect no longer exists.' };
+  if (lead.status === 'opted_out') return { error: 'This prospect asked not to be contacted.' };
+
+  const now = today();
+  const change = applyOutcome(lead, outcome, now);
+  await query('INSERT INTO activities (lead_id, user_id, channel, outcome, notes) VALUES ($1, $2, $3, $4, $5)',
+    [leadId, user.id, channel, outcome, notes]);
+  if (change.status === 'won') {
+    await query(
+      `UPDATE leads SET status = 'won', customer_since = $2, closed_on = $2, won_by = $3, introduced_on = COALESCE(introduced_on, $2),
+         lost_reason = '', next_action_on = NULL, next_action = '' WHERE id = $1`, [leadId, now, user.id]);
+  } else if (change.status === 'lost') {
+    await query("UPDATE leads SET status = 'lost', lost_reason = $2, closed_on = $3, next_action_on = NULL, next_action = '' WHERE id = $1",
+      [leadId, change.lostReason, now]);
+  } else if (change.status) {
+    await query('UPDATE leads SET status = $2 WHERE id = $1', [leadId, change.status]);
+  }
+  if (change.status !== 'won' && change.status !== 'lost') {
+    // The rep's own next step wins over the default for the outcome.
+    const on = nextOn || change.nextActionOn;
+    await query('UPDATE leads SET next_action_on = $2, next_action = $3 WHERE id = $1',
+      [leadId, on, on ? nextAction || `Follow up (${OUTCOMES[outcome as keyof typeof OUTCOMES].label.toLowerCase()})` : '']);
+  }
+  // Any human contact stops queued automatic emails, so the prospect is not emailed over the top of a conversation.
+  if (OUTCOMES[outcome as keyof typeof OUTCOMES].conversation) {
+    await query("UPDATE outbox SET status = 'cancelled' WHERE lead_id = $1 AND status IN ('pending', 'approved')", [leadId]);
+  }
+  refresh(lead.client_id);
+  redirect(withSaved(back, `${CHANNELS[channel as keyof typeof CHANNELS]} logged: ${OUTCOMES[outcome as keyof typeof OUTCOMES].label}`));
+}
+
+export async function bookMeeting(leadId: number, back: string, formData: FormData): Promise<Result> {
+  const user = await requireUser();
+  const date = String(formData.get('date') ?? '').trim();
+  const time = String(formData.get('time') ?? '').trim();
+  const kind = String(formData.get('kind') ?? '').trim() || 'Meeting';
+  const location = String(formData.get('location') ?? '').trim();
+  if (!DATE.test(date) || !/^\d{2}:\d{2}$/.test(time)) return { error: 'Pick the day and time of the meeting.' };
+  if (date < today()) return { error: 'The meeting date is in the past.' };
+  const lead = (await query<{ client_id: number }>('SELECT client_id FROM leads WHERE id = $1', [leadId])).rows[0];
+  if (!lead) return { error: 'That prospect no longer exists.' };
+  // The time is entered in Michigan time.
+  await query(
+    `INSERT INTO meetings (lead_id, booked_by, starts_at, kind, location) VALUES ($1, $2, ($3 || ' ' || $4)::timestamp AT TIME ZONE 'America/Detroit', $5, $6)`,
+    [leadId, user.id, date, time, kind.slice(0, 60), location.slice(0, 200)]);
+  await query(
+    `UPDATE leads SET status = CASE WHEN status IN ('new', 'following_up') THEN 'talking' ELSE status END,
+       next_action_on = $2, next_action = $3 WHERE id = $1 AND status NOT IN ('won', 'lost', 'opted_out')`,
+    [leadId, date, `${kind} at ${time}`]);
+  await query("UPDATE outbox SET status = 'cancelled' WHERE lead_id = $1 AND status IN ('pending', 'approved')", [leadId]);
+  refresh(lead.client_id);
+  redirect(withSaved(back, `${kind} booked`));
+}
+
+export async function setMeetingStatus(meetingId: number, status: string, back: string) {
+  await requireUser();
+  if (!['held', 'no_show', 'cancelled', 'scheduled'].includes(status)) return;
+  const { rows } = await query<{ client_id: number }>(
+    'UPDATE meetings m SET status = $2 FROM leads l WHERE m.id = $1 AND l.id = m.lead_id RETURNING l.client_id', [meetingId, status]);
+  refresh(rows[0]?.client_id);
+  redirect(withSaved(back, 'Meeting updated'));
+}
+
+export async function setNextAction(leadId: number, back: string, formData: FormData): Promise<Result> {
+  await requireUser();
+  const on = String(formData.get('next_action_on') ?? '').trim();
+  const what = String(formData.get('next_action') ?? '').trim();
+  if (on && !DATE.test(on)) return { error: 'Pick a date.' };
+  const { rows } = await query<{ client_id: number }>(
+    'UPDATE leads SET next_action_on = $2, next_action = $3 WHERE id = $1 RETURNING client_id', [leadId, on || null, on ? what || 'Follow up' : '']);
+  refresh(rows[0]?.client_id);
+  redirect(withSaved(back, on ? 'Next step set' : 'Next step cleared'));
+}
+
+export async function assignLead(leadId: number, back: string, formData: FormData): Promise<Result> {
+  await requireUser();
+  const to = parseWholeNumber(formData.get('assignee_id'));
+  if (Number.isNaN(to)) return { error: 'Pick a rep.' };
+  const { rows } = await query<{ client_id: number }>('UPDATE leads SET assignee_id = $2 WHERE id = $1 RETURNING client_id', [leadId, to]);
+  refresh(rows[0]?.client_id);
+  redirect(withSaved(back, 'Reassigned'));
+}
+
+export async function saveScript(clientId: number, formData: FormData): Promise<Result> {
+  await requireUser();
+  const script = String(formData.get('call_script') ?? '').trim();
+  await query('UPDATE clients SET call_script = $2 WHERE id = $1', [clientId, script.slice(0, 8000)]);
+  refresh(clientId);
+  redirect(withSaved(`/clients/${clientId}#script-h`, 'Script saved'));
+}
+
+export async function setCommission(userId: number, formData: FormData): Promise<Result> {
+  await requireOwner();
+  const pct = parsePercent(formData.get('commission_percent'));
+  if (pct === null || Number.isNaN(pct)) return { error: 'Commission must be a percent from 0 to 100.' };
+  await query('UPDATE users SET commission_percent = $2 WHERE id = $1', [userId, pct]);
+  revalidatePath('/team');
+  revalidatePath('/scoreboard');
+  redirect('/team?saved=1');
+}
