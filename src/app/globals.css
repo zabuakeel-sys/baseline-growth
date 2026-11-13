@@ -49,3 +49,44 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 .muted { color: var(--muted); }
 .login { max-width: 380px; margin: 10vh auto; }
 .login form { display: flex; flex-direction: column; gap: 12px; }
+
+h3 { font-size: 15px; margin: 0 0 6px; }
+.plain-list { list-style: none; padding: 0; margin: 0; }
+.plain-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.plain-list li:last-child { border-bottom: 0; }
+fieldset.area { border: 1px solid var(--line); }
+fieldset.area legend { font-weight: 700; font-size: 17px; padding: 0 6px; }
+.statement { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.statement p { margin: 0 0 8px; }
+.scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.choice { position: relative; flex-direction: row; color: var(--ink); }
+.choice input { position: absolute; opacity: 0; inset: 0; min-height: 0; margin: 0; cursor: pointer; }
+.choice span { flex: 1; text-align: center; padding: 10px 4px; min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; background: var(--bg); }
+.choice input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.choice input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.meters { display: grid; gap: 10px; margin: 16px 0 12px; }
+.meter { display: grid; grid-template-columns: minmax(150px, 220px) 1fr 36px; gap: 12px; align-items: center; }
+.meter-label { line-height: 1.3; }
+.meter-label .tag { margin-left: 8px; white-space: nowrap; }
+.meter-track { height: 12px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.meter-fill { height: 100%; background: var(--muted); border-radius: 0 4px 4px 0; }
+.meter-fill.focus { background: var(--accent); }
+.meter-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.strong { font-weight: 700; }
+.tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); }
+.plan-month { margin-bottom: 12px; }
+.plan-month ol { margin: 0; padding-left: 20px; }
+.plan-month li { margin-bottom: 6px; }
+@media (max-width: 560px) {
+  .meter { grid-template-columns: 1fr 36px; }
+  .meter-track { grid-column: 1 / -1; grid-row: 2; }
+  .choice span { font-size: 12px; padding: 8px 2px; }
+}
+@media print {
+  header.top, .no-print { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { border-color: #ccc; break-inside: avoid; }
+  .meter-fill { background: #888 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .meter-fill.focus { background: #1f5fbf !important; }
+  .meter-track { background: #e5e5e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

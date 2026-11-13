@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 type Result = { error?: string } | void;
 
@@ -17,6 +17,9 @@ export default function ActionForm({
 }) {
   const [error, setError] = useState('');
   const [pending, startTransition] = useTransition();
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  // Long forms submit from the bottom; bring the error into view so it is not missed.
+  useEffect(() => { if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [error]);
   return (
     <form
       className={className}
@@ -30,7 +33,7 @@ export default function ActionForm({
         });
       }}
     >
-      {error && <p className="error full" role="alert">{error}</p>}
+      {error && <p ref={errorRef} className="error full" role="alert">{error}</p>}
       {children}
     </form>
   );

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { getClient } from '@/lib/clients';
+import { listCheckups } from '@/lib/checkups';
+import { AREAS, scoreCheckup } from '@/lib/checkup';
 import { formatCents } from '@/lib/money';
 import { saveBaseline, updateClient } from '../actions';
 import ClientForm from '../ClientForm';
@@ -26,6 +28,7 @@ export default async function ClientPage({
   const found = await getClient(id);
   if (!found) notFound();
   const { client, baseline } = found;
+  const checkups = await listCheckups(id);
   const { saved } = await searchParams;
   const locked = Boolean(baseline?.signed_off) && !isOwner;
 
@@ -38,6 +41,30 @@ export default async function ClientPage({
         {isOwner && client.monthly_fee_cents > 0 && <> · {formatCents(client.monthly_fee_cents)}/mo + {client.bonus_percent}% of growth</>}
       </p>
       {saved && <p className="notice" role="status">{saved}.</p>}
+
+      <section className="card" aria-labelledby="checkups-h">
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 id="checkups-h" style={{ margin: 0 }}>Revenue Checkups</h2>
+          <Link className="button" href={`/clients/${id}/checkup`}>Start checkup</Link>
+        </div>
+        {checkups.length === 0 ? (
+          <p className="muted" style={{ marginBottom: 0 }}>No checkup yet. Run one with the owner to find where revenue is stuck.</p>
+        ) : (
+          <ul className="plain-list">
+            {checkups.map((k) => {
+              const { focus, overall } = scoreCheckup(k.answers);
+              const names = focus.map((f) => AREAS.find((a) => a.key === f)!.name.toLowerCase());
+              return (
+                <li key={k.id}>
+                  <Link href={`/checkups/${k.id}`}>{k.conducted_on}</Link>
+                  {' · '}{names.length ? `Stuck at ${names.join(' and ')}` : 'No single bottleneck'}
+                  <span className="muted"> · overall {overall}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="card" aria-labelledby="baseline-h">
         <h2 id="baseline-h">Baseline</h2>
