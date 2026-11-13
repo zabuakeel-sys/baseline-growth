@@ -12,7 +12,7 @@ export async function approveOutreach(clientId: number, back: string): Promise<R
   await requireOwner();
   const c = (await query<{ mailing_address: string; offer: string }>('SELECT mailing_address, offer FROM clients WHERE id = $1', [clientId])).rows[0];
   if (!c) return { error: 'That business no longer exists.' };
-  if (!c.mailing_address || !c.offer) return { error: 'Finish the answers first (the offer and mailing address are in every email).' };
+  if (!c.mailing_address || !c.offer) return { error: c.offer ? 'Add a mailing address on the business page first: US law requires one in every outreach email.' : 'Finish the answers first: the offer is in every email.' };
   await query('UPDATE clients SET outreach_approved_at = now() WHERE id = $1', [clientId]);
   await query("UPDATE outbox SET status = 'approved', approved_at = now() WHERE client_id = $1 AND kind = 'sequence' AND status = 'pending'", [clientId]);
   for (const p of ['/', '/clients', `/clients/${clientId}`, '/outbox']) revalidatePath(p);

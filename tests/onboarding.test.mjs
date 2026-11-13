@@ -13,7 +13,7 @@ test('targets: every type in every place, bullets and blanks ignored, capped', (
     { what: 'dental office', location: 'Troy, MI' }, { what: 'medical clinic', location: 'Troy, MI' },
     { what: 'dental office', location: '48084' }, { what: 'medical clinic', location: '48084' },
   ]);
-  assert.equal(buildTargets('a\nb\nc', Array.from({ length: 30 }, (_, i) => `City ${i}`).join('\n')).length, 40);
+  assert.equal(buildTargets('a\nb\nc', Array.from({ length: 60 }, (_, i) => `City ${i}`).join('\n')).length, 150);
 });
 
 test('script reads their answers and works with the call coach', () => {
@@ -38,4 +38,15 @@ test('missing required answers are listed', () => {
   const missing = missingAnswers((k) => answers[k]);
   assert.ok(missing.includes('Who are your best customers? List the types of businesses.'));
   assert.ok(!missing.includes('What is the business called?'));
+});
+
+test('"Nationwide" searches the largest US metro areas', async () => {
+  const { US_METROS, isNationwide } = await import('../src/lib/onboarding.js');
+  assert.equal(US_METROS.length, 50);
+  for (const w of ['Nationwide', 'USA', 'all over America', 'United States.', 'across the country']) assert.ok(isNationwide(w), w);
+  assert.ok(!isNationwide('Troy, MI'));
+  const t = buildTargets('auto repair shop\ncollision repair shop', 'Nationwide\nDetroit, MI');
+  assert.equal(t.length, 100);
+  assert.deepEqual(t[0], { what: 'auto repair shop', location: 'New York, NY' });
+  assert.deepEqual(t[1], { what: 'collision repair shop', location: 'New York, NY' });
 });

@@ -32,7 +32,7 @@ sends on its own. "Pause" puts it back to approving each email. Reply drafts alw
 home page and up to four useful pages (about, services, pricing, areas), with the same network
 safety checks as prospect research. It picks up the name, logo, phone and booking link, and with
 `ANTHROPIC_API_KEY` drafts the offer, reasons customers pick them, first step, customer types,
-places served and common objections, using only what the site says. Drafted answers are marked
+places served and common objections, using only what the site says. "Nationwide" as a place searches the 50 largest US metro areas. Money answers and the mailing address are optional to start; emails do not send until the address is filled in. Drafted answers are marked
 "From their website, check it"; the ones only a person can give are marked "Ask the owner" (who
 gets interested customers, what a customer is worth, who not to contact, visits, mailing address)
 or "From your agreement" (deal terms). The deal terms can be saved as your standard and are then

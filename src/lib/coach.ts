@@ -202,7 +202,7 @@ Rules:
 - "why_us": two or three short reasons customers pick them, each on its own line, only reasons the site states.
 - "first_step": how a new customer usually starts, a few words (for example "free walkthrough", "free quote", "demo").
 - "who": the types of businesses that buy from them, one per line, specific enough to search on Google Maps (for example "dental office", "medical clinic", "property management company"). If they sell to households rather than businesses, still list what the site names.
-- "where": cities, counties or ZIP codes they serve, one per line, only if the site names them.
+- "where": cities, counties or ZIP codes they serve, one per line, only if the site names them. If they serve customers across the whole country, return exactly "Nationwide".
 - "objections": up to three things prospects commonly say when turning down this kind of service, with a short honest answer that uses only facts from the site.
 - "name": the business's name as it appears on the site.
 - "contact_name": the owner's or manager's name if the site gives one, else empty.

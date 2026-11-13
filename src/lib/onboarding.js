@@ -15,10 +15,10 @@ export const QUESTIONS = [
   { section: 'What they sell', key: 'logo_url', ask: 'Link to your logo image (optional)', why: 'Shown small under the signature of outreach emails. Must start with https://. Right-click the logo on their website, "Copy image address".' },
   { section: 'What they sell', key: 'claim_url', ask: 'Is there a link where customers book or sign up?', why: 'Goes on the QR code reps show. Leave empty if none.' },
   { section: 'Who to find', key: 'who', ask: 'Who are your best customers? List the types of businesses.', why: 'Each line becomes a search. Example: "dental office", "medical clinic". Be specific.', multiline: true, required: true },
-  { section: 'Who to find', key: 'where', ask: 'Where do you serve? List cities, towns or ZIP codes.', why: 'Each place is searched separately and gives up to about 60 businesses, so more places means more prospects.', multiline: true, required: true },
+  { section: 'Who to find', key: 'where', ask: 'Where do you serve? List cities, towns or ZIP codes, or write "Nationwide".', why: 'Each place is searched separately and gives up to about 60 businesses. "Nationwide" searches the 50 largest US metro areas, a few a day.', multiline: true, required: true },
   { section: 'Who to find', key: 'visits', owner: true, ask: 'Are your customers close enough that a rep could stop by in person?', why: 'Yes adds in-person visits to the schedule for prospects with an address; no keeps it to calls and emails.', choices: [['no', 'No: calls and emails only'], ['yes', 'Yes: add visits']] },
   { section: 'Who to find', key: 'skip', owner: true, ask: 'Anyone we should not contact? Chains, current customers, competitors.', why: 'Names to skip, separated by commas.' },
-  { section: 'Who to find', key: 'customer_value', owner: true, ask: 'What is a typical new customer worth to you per month (or per job)?', why: 'Tells us which prospects are worth the most effort and what our share is worth.', money: true, required: true },
+  { section: 'Who to find', key: 'customer_value', owner: true, ask: 'What is a typical new customer worth to you per month (or per job)?', why: 'Optional. Tells us what our share is worth; leave empty while you are just trying it out.', money: true },
   { section: 'What people say', key: 'objections', ask: 'What do people usually say when they turn you down, and what do you answer?', why: 'Each pair becomes an answer in the script and in the call coach.', pairs: true },
   { section: 'Pricing (optional)', key: 'pricing', ask: 'If you price by size: what do you charge per 1,000 sq ft per visit, by building type?', why: 'Lets reps quote on the spot. One type per line, like "Office: 45".', multiline: true },
   { section: 'Our deal', key: 'share_percent', owner: true, ask: 'Revenue share we agreed (% of what each customer we bring pays you)', why: 'From your signed agreement.', percent: true },
@@ -26,15 +26,28 @@ export const QUESTIONS = [
   { section: 'Our deal', key: 'signup_fee', owner: true, ask: 'Fee per new customer, if any', why: 'From your signed agreement.', money: true },
   { section: 'Our deal', key: 'monthly_fee', owner: true, ask: 'Monthly retainer, if any', why: 'From your signed agreement.', money: true },
   { section: 'Our deal', key: 'contract_start', owner: true, ask: 'Agreement start date', why: 'Billing starts this month.', date: true },
-  { section: 'Our deal', key: 'mailing_address', owner: true, ask: 'Mailing address for outreach emails (yours or theirs; ask the lawyer)', why: 'US law requires a postal address in commercial email.', required: true },
+  { section: 'Our deal', key: 'mailing_address', owner: true, ask: 'Mailing address for outreach emails (yours or theirs; ask the lawyer)', why: 'Optional to start, but emails are not sent until it is filled in: US law requires a postal address in commercial email.' },
 ];
 
 const lines = (text) => String(text || '').split('\n').map((s) => s.trim().replace(/^[-*•]\s*/, '')).filter(Boolean);
 
-/** Search queries: every customer type in every place, at most `max` of them. */
-export function buildTargets(who, where, max = 40) {
+/** The 50 largest US metro areas (approximate order), searched for "Nationwide". */
+export const US_METROS = [
+  'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Dallas, TX', 'Houston, TX', 'Washington, DC', 'Philadelphia, PA', 'Miami, FL',
+  'Atlanta, GA', 'Boston, MA', 'Phoenix, AZ', 'San Francisco, CA', 'Riverside, CA', 'Detroit, MI', 'Seattle, WA', 'Minneapolis, MN',
+  'San Diego, CA', 'Tampa, FL', 'Denver, CO', 'Baltimore, MD', 'St. Louis, MO', 'Orlando, FL', 'Charlotte, NC', 'San Antonio, TX',
+  'Portland, OR', 'Sacramento, CA', 'Pittsburgh, PA', 'Austin, TX', 'Las Vegas, NV', 'Cincinnati, OH', 'Kansas City, MO', 'Columbus, OH',
+  'Indianapolis, IN', 'Cleveland, OH', 'San Jose, CA', 'Nashville, TN', 'Virginia Beach, VA', 'Providence, RI', 'Jacksonville, FL',
+  'Milwaukee, WI', 'Raleigh, NC', 'Oklahoma City, OK', 'Memphis, TN', 'Richmond, VA', 'Louisville, KY', 'New Orleans, LA',
+  'Salt Lake City, UT', 'Hartford, CT', 'Buffalo, NY', 'Birmingham, AL',
+];
+const NATIONWIDE = /^(nationwide|national|usa|u\.s\.a\.?|us|u\.s\.?|united states|all (of )?(the )?(us|usa|america|united states)|america|all over america|across (the )?(us|usa|america|country))$/i;
+export const isNationwide = (place) => NATIONWIDE.test(String(place).trim().replace(/[.!]+$/, ''));
+
+/** Search queries: every customer type in every place (each place for every type before the next place), at most `max`. */
+export function buildTargets(who, where, max = 150) {
   const types = lines(who);
-  const places = lines(where);
+  const places = [...new Set(lines(where).flatMap((p) => (isNationwide(p) ? US_METROS : [p])))];
   const out = [];
   for (const place of places) for (const what of types) out.push({ what, location: place });
   return out.slice(0, max);
