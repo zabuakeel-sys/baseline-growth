@@ -45,7 +45,9 @@ export default function OnboardingForm({ action, answers, editing }: {
                 <label key={q.key} className={q.multiline || q.key === 'offer' || q.key === 'mailing_address' ? 'full' : ''}>
                   <span><strong style={{ color: 'var(--ink)' }}>{q.ask}</strong>{q.required ? ' *' : ''}</span>
                   <span style={{ fontSize: 12 }}>{q.why}</span>
-                  {q.multiline
+                  {q.choices
+                    ? <select name={q.key} defaultValue={val(q.key) || q.choices[0][0]}>{q.choices.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                    : q.multiline
                     ? <textarea name={q.key} defaultValue={val(q.key)} rows={3} />
                     : <input name={q.key} defaultValue={val(q.key)} type={q.date ? 'date' : 'text'} inputMode={q.money || q.percent ? 'decimal' : q.whole ? 'numeric' : undefined} />}
                 </label>

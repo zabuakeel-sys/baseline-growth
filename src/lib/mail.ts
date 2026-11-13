@@ -1,15 +1,36 @@
-// The outreach mailbox: sending over SMTP and reading replies over IMAP.
-// Configured entirely by environment variables, so no password is ever stored in the database:
-//   OUTREACH_FROM   e.g. "Zaino <zaino@getbaselinegrowth.com>"  (a separate outreach domain)
-//   SMTP_HOST, SMTP_PORT (465), SMTP_USER, SMTP_PASS, SMTP_SECURE ("true" for port 465)
-//   IMAP_HOST, IMAP_PORT (993), IMAP_USER, IMAP_PASS, IMAP_SECURE ("true" for port 993)
+// Mailboxes: sending over SMTP and reading replies over IMAP.
+// Two kinds of mailbox:
+//  - each client's own outreach mailbox (the address they gave us), stored per client with the
+//    password encrypted (see secret.ts); outreach for that client is sent and read there;
+//  - the shared mailbox from environment variables, used for alerts and hand-offs to clients,
+//    and for outreach of any client without a mailbox of its own:
+//      OUTREACH_FROM, SMTP_HOST, SMTP_PORT (465), SMTP_USER, SMTP_PASS, SMTP_SECURE,
+//      IMAP_HOST, IMAP_PORT (993), IMAP_USER, IMAP_PASS, IMAP_SECURE
 import { randomUUID } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { query } from './db';
+import { decrypt } from './secret';
+
+export type MailAccount = {
+  key: string; // cache key: 'shared' or 'client:<id>'
+  clientId: number | null;
+  from: string;
+  smtp: { host: string; port: number; secure: boolean; user: string; pass: string };
+  imap: { host: string; port: number; secure: boolean; user: string; pass: string } | null;
+  dailyLimit: number | null; // null = the shared outreach limit applies
+};
 
 const env = (k: string) => process.env[k] ?? '';
-const secure = (k: string, port: number) => (env(k) ? env(k) === 'true' : port === 465 || port === 993);
+const secureFlag = (k: string, port: number) => (env(k) ? env(k) === 'true' : port === 465 || port === 993);
+
+/** Settings a provider uses; "other" takes what the owner types. */
+export const PROVIDERS = {
+  google: { label: 'Google Workspace / Gmail', smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true, imap_host: 'imap.gmail.com', imap_port: 993, imap_secure: true },
+  microsoft: { label: 'Microsoft 365 / Outlook', smtp_host: 'smtp.office365.com', smtp_port: 587, smtp_secure: false, imap_host: 'outlook.office365.com', imap_port: 993, imap_secure: true },
+  other: { label: 'Other', smtp_host: '', smtp_port: 465, smtp_secure: true, imap_host: '', imap_port: 993, imap_secure: true },
+} as const;
 
 export function mailStatus() {
   const send = Boolean(env('OUTREACH_FROM') && env('SMTP_HOST') && env('SMTP_USER') && env('SMTP_PASS'));
@@ -17,27 +38,78 @@ export function mailStatus() {
   return { send, read, from: env('OUTREACH_FROM') };
 }
 
-let transport: Transporter | null = null;
-function smtp() {
-  if (!transport) {
-    const port = Number(env('SMTP_PORT') || 465);
-    transport = nodemailer.createTransport({
-      host: env('SMTP_HOST'), port, secure: secure('SMTP_SECURE', port),
-      auth: { user: env('SMTP_USER'), pass: env('SMTP_PASS') },
-      // Plain local test servers have no certificate; real ones always do.
-      tls: env('MAIL_ALLOW_SELF_SIGNED') === '1' ? { rejectUnauthorized: false } : undefined,
-    });
-  }
-  return transport;
+export function sharedAccount(): MailAccount | null {
+  const s = mailStatus();
+  if (!s.send) return null;
+  const smtpPort = Number(env('SMTP_PORT') || 465);
+  const imapPort = Number(env('IMAP_PORT') || 993);
+  return {
+    key: 'shared', clientId: null, from: s.from, dailyLimit: null,
+    smtp: { host: env('SMTP_HOST'), port: smtpPort, secure: secureFlag('SMTP_SECURE', smtpPort), user: env('SMTP_USER'), pass: env('SMTP_PASS') },
+    imap: s.read ? { host: env('IMAP_HOST'), port: imapPort, secure: secureFlag('IMAP_SECURE', imapPort), user: env('IMAP_USER'), pass: env('IMAP_PASS') } : null,
+  };
 }
 
-const fromDomain = () => (env('OUTREACH_FROM').match(/@([^>\s]+)/)?.[1] ?? 'localhost').toLowerCase();
+type MailboxRow = {
+  client_id: number; from_name: string; email: string; smtp_host: string; smtp_port: number; smtp_secure: boolean;
+  imap_host: string; imap_port: number; imap_secure: boolean; username: string; password_enc: string; daily_limit: number;
+};
 
-/** Sends a plain-text email; returns the Message-ID we gave it, so replies can be matched. */
-export async function sendMail(m: { to: string; subject: string; text: string; inReplyTo?: string | null; cc?: string }) {
-  const messageId = `<${randomUUID()}@${fromDomain()}>`;
-  await smtp().sendMail({
-    from: env('OUTREACH_FROM'), to: m.to, cc: m.cc, subject: m.subject, text: m.text, messageId,
+function fromRow(r: MailboxRow): MailAccount {
+  const pass = decrypt(r.password_enc);
+  return {
+    key: `client:${r.client_id}`, clientId: r.client_id, from: `${r.from_name.replace(/["<>]/g, '')} <${r.email}>`, dailyLimit: r.daily_limit,
+    smtp: { host: r.smtp_host, port: r.smtp_port, secure: r.smtp_secure, user: r.username, pass },
+    imap: { host: r.imap_host, port: r.imap_port, secure: r.imap_secure, user: r.username, pass },
+  };
+}
+
+/** A client's own mailbox, or null when it has none (or its password cannot be read). */
+export async function clientAccount(clientId: number): Promise<MailAccount | null> {
+  const r = (await query<MailboxRow>('SELECT * FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
+  if (!r) return null;
+  try { return fromRow(r); } catch { return null; }
+}
+
+/** Every client mailbox that can be used. */
+export async function allClientAccounts(): Promise<MailAccount[]> {
+  const rows = (await query<MailboxRow>(
+    "SELECT m.* FROM client_mailboxes m JOIN clients c ON c.id = m.client_id WHERE c.status <> 'ended'")).rows;
+  const out: MailAccount[] = [];
+  for (const r of rows) { try { out.push(fromRow(r)); } catch { /* unreadable password: shown on the client page */ } }
+  return out;
+}
+
+/** The mailbox outreach for this client goes out from: its own, else the shared one. */
+export async function outreachAccount(clientId: number) {
+  return (await clientAccount(clientId)) ?? sharedAccount();
+}
+
+const transports = new Map<string, { sig: string; t: Transporter }>();
+const tlsOpts = () => (env('MAIL_ALLOW_SELF_SIGNED') === '1' ? { rejectUnauthorized: false } : undefined);
+function transportFor(a: MailAccount) {
+  const sig = JSON.stringify(a.smtp);
+  const cached = transports.get(a.key);
+  if (cached && cached.sig === sig) return cached.t;
+  const t = nodemailer.createTransport({
+    host: a.smtp.host, port: a.smtp.port, secure: a.smtp.secure,
+    auth: { user: a.smtp.user, pass: a.smtp.pass }, tls: tlsOpts(),
+  });
+  transports.set(a.key, { sig, t });
+  return t;
+}
+
+const domainOf = (from: string) => (from.match(/@([^>\s]+)/)?.[1] ?? 'localhost').toLowerCase();
+
+/** Sends an email (plain text, plus HTML when given); returns the Message-ID used, so replies can be matched. */
+export async function sendMail(
+  m: { to: string; subject: string; text: string; html?: string; inReplyTo?: string | null; cc?: string },
+  account: MailAccount | null = sharedAccount(),
+) {
+  if (!account) throw new Error('No mailbox is connected for sending.');
+  const messageId = `<${randomUUID()}@${domainOf(account.from)}>`;
+  await transportFor(account).sendMail({
+    from: account.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), messageId,
     ...(m.inReplyTo ? { inReplyTo: m.inReplyTo, references: m.inReplyTo } : {}),
   });
   return messageId;
@@ -48,15 +120,17 @@ export type Incoming = {
   text: string; headers: Record<string, string>; date: Date;
 };
 
-/** Reads every unread message in the inbox and marks it read. */
-export async function fetchUnread(): Promise<Incoming[]> {
-  const port = Number(env('IMAP_PORT') || 993);
-  const client = new ImapFlow({
-    host: env('IMAP_HOST'), port, secure: secure('IMAP_SECURE', port),
-    auth: { user: env('IMAP_USER'), pass: env('IMAP_PASS') },
-    logger: false,
-    tls: env('MAIL_ALLOW_SELF_SIGNED') === '1' ? { rejectUnauthorized: false } : undefined,
+function imapClient(a: MailAccount) {
+  if (!a.imap) throw new Error('This mailbox has no reading settings.');
+  return new ImapFlow({
+    host: a.imap.host, port: a.imap.port, secure: a.imap.secure,
+    auth: { user: a.imap.user, pass: a.imap.pass }, logger: false, tls: tlsOpts(),
   });
+}
+
+/** Reads every unread message in the account's inbox and marks it read. */
+export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
+  const client = imapClient(account);
   await client.connect();
   const out: Incoming[] = [];
   const lock = await client.getMailboxLock('INBOX');
@@ -70,14 +144,9 @@ export async function fetchUnread(): Promise<Incoming[]> {
         for (const [k, v] of p.headers) headers[k] = typeof v === 'string' ? v : JSON.stringify(v);
         const refs = p.references ? (Array.isArray(p.references) ? p.references : [p.references]) : [];
         out.push({
-          messageId: p.messageId ?? `<no-id-${msg.uid}@inbox>`,
-          inReplyTo: p.inReplyTo ?? '',
-          references: refs,
-          from: p.from?.text ?? '',
-          subject: p.subject ?? '',
-          text: (p.text ?? '').slice(0, 20_000),
-          headers,
-          date: p.date ?? new Date(),
+          messageId: p.messageId ?? `<no-id-${account.key}-${msg.uid}@inbox>`,
+          inReplyTo: p.inReplyTo ?? '', references: refs, from: p.from?.text ?? '', subject: p.subject ?? '',
+          text: (p.text ?? '').slice(0, 20_000), headers, date: p.date ?? new Date(),
         });
       }
       await client.messageFlagsAdd(uids, ['\\Seen'], { uid: true });
@@ -87,4 +156,20 @@ export async function fetchUnread(): Promise<Incoming[]> {
     await client.logout().catch(() => {});
   }
   return out;
+}
+
+/** Checks that a mailbox can log in to send and to read. Throws with a readable reason. */
+export async function verifyAccount(account: MailAccount) {
+  try {
+    await transportFor(account).verify();
+  } catch (err) {
+    throw new Error(`Sending login failed: ${(err as Error).message}`);
+  }
+  try {
+    const c = imapClient(account);
+    await c.connect();
+    await c.logout();
+  } catch (err) {
+    throw new Error(`Reading login failed: ${(err as Error).message}`);
+  }
 }

@@ -76,19 +76,25 @@ const midSentence = (text) => {
  * need:    what we think this prospect needs, optional.
  * address: postal address for the email footer.
  */
-export function messageFor(touch, { leadName, clientName, offer, need, senderName, address }) {
+/** Signature and opt-out line that end every outreach email, replies included. */
+export function signOff({ clientName, senderName, address }) {
+  const sign = `\n\n${senderName ? `${senderName}\n` : ''}On behalf of ${clientName}`;
+  const optOut = `\n\nIf you'd rather not hear from us, reply "no thanks" and we won't contact you again.${address ? `\n${address.trim()}` : ''}`;
+  return sign + optOut;
+}
+
+/** `personal` is an optional first line about this prospect (AI-written, from facts we found). */
+export function messageFor(touch, { leadName, clientName, offer, need, senderName, address, personal }) {
   const hi = `Hi ${firstName(leadName)},`;
   const what = offer ? `${offer.trim().replace(/[.\s]+$/, '')}.` : `I work with ${clientName}.`;
   const fit = need ? ` I thought it could help with ${midSentence(need)}.` : '';
   const bodies = [
-    `${hi}\n\nI'm reaching out on behalf of ${clientName}. ${what}${fit}\n\nWould a 10-minute call this week be worth it to see if it fits?`,
+    `${hi}\n\n${personal ? `${personal.trim()} ` : ''}I'm reaching out on behalf of ${clientName}. ${what}${fit}\n\nWould a 10-minute call this week be worth it to see if it fits?`,
     `${hi}\n\nFollowing up on my note about ${clientName}. Is this something you handle, or is there someone better to talk to?`,
     `${hi}\n\nOne more try in case my last message got buried. Happy to send a short summary by email instead of a call. Would that help?`,
     `${hi}\n\nI'll stop here so I'm not cluttering your inbox. If ${clientName} is ever useful to you, just reply and I'll pick it up.`,
   ];
-  const sign = `\n\n${senderName ? `${senderName}\n` : ''}On behalf of ${clientName}`;
-  const optOut = `\n\nIf you'd rather not hear from us, reply "no thanks" and we won't contact you again.${address ? `\n${address.trim()}` : ''}`;
-  return bodies[Math.min(touch, bodies.length - 1)] + sign + optOut;
+  return bodies[Math.min(touch, bodies.length - 1)] + signOff({ clientName, senderName, address });
 }
 
 /**

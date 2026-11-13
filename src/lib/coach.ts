@@ -28,6 +28,7 @@ Rules:
 - "why" is one short line for the rep explaining the move.`;
 
 let client: Anthropic | null = null;
+const newClient = () => new Anthropic({ timeout: 20_000, maxRetries: 1 });
 
 export async function suggestNext(ctx: {
   transcript: string; clientName: string; offer: string; script: string; brief: string[];
@@ -48,7 +49,7 @@ export async function suggestNext(ctx: {
   };
   if (!coachConfigured() || !heard.trim()) return fallback();
 
-  client ??= new Anthropic({ timeout: 20_000, maxRetries: 1 });
+  client ??= newClient();
   try {
     const response = await client.messages.parse({
       model: 'claude-opus-5-5',
@@ -74,5 +75,118 @@ export async function suggestNext(ctx: {
     if (err instanceof Anthropic.APIError) console.error(`call coach API error ${err.status}:`, err.message);
     else console.error('call coach failed:', err);
     return fallback();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Email writing. Both functions return null when no AI is configured or the call fails, and the
+// caller falls back to the plain template, so outreach never waits on the AI.
+
+const getClient = () => (client ??= newClient());
+
+const LINE_SYSTEM = `You write the personal first line of a short cold email to a local business, from facts a researcher found about them.
+
+Rules:
+- One sentence, under 25 words, friendly and specific to them. It goes right after "Hi <name>," and before the sender says who they are.
+- Use ONLY the facts given. Never invent compliments, numbers, awards, history, or anything not stated.
+- No flattery words like "amazing" or "impressive", no exclamation marks, no questions.
+- If the facts are too thin to say something specific and true, return an empty line.`;
+
+const Line = z.object({ line: z.string() });
+
+/** One true, specific opening sentence about the prospect, or '' when there is nothing specific to say. */
+export async function personalLine(facts: {
+  name: string; about: string; need: string; rating: number | null; reviews: number | null; city: string; clientName: string; offer: string;
+}): Promise<string | null> {
+  if (!coachConfigured()) return null;
+  try {
+    const response = await getClient().messages.parse({
+      model: 'claude-opus-5-5',
+      max_tokens: 1000,
+      output_config: { effort: 'low', format: zodOutputFormat(Line) },
+      system: LINE_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          `Prospect: ${facts.name}${facts.city ? ` (${facts.city})` : ''}`,
+          facts.about && `What we found about them:\n${facts.about.slice(0, 2000)}`,
+          facts.need && `What they may need: ${facts.need}`,
+          facts.rating != null && `Google rating: ${facts.rating} from ${facts.reviews ?? 0} reviews`,
+          `The email is on behalf of ${facts.clientName}: ${facts.offer || '(no offer given)'}`,
+        ].filter(Boolean).join('\n\n'),
+      }],
+    });
+    if (response.stop_reason === 'refusal' || !response.parsed_output) return null;
+    const line = response.parsed_output.line.trim().replace(/\s+/g, ' ');
+    // Guardrails: one sentence, short, no question or exclamation.
+    if (!line || line.length > 200 || /[!?]/.test(line) || /\n/.test(line)) return '';
+    return /[.]$/.test(line) ? line : `${line}.`;
+  } catch (err) {
+    console.error('personal line failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
+    return null;
+  }
+}
+
+export const INTENTS = {
+  wants_meeting: 'Wants to meet or talk',
+  question: 'Asked a question',
+  send_info: 'Wants information first',
+  not_now: 'Not now / later',
+  other: 'Other',
+} as const;
+
+const REPLY_SYSTEM = `You draft a reply to a prospect who answered a sales email sent on behalf of a client business. A person will read and edit your draft before it is sent.
+
+Rules:
+- Short: two to five sentences. Plain, warm, direct. Start with "Hi <first name>," on its own line, then the body. Do not sign off; the signature is added after.
+- Answer what they actually asked, using ONLY the client facts given. Never invent prices, guarantees, availability, numbers or features. If they ask something the facts do not answer, say you will find out and get back to them.
+- Move toward the client's usual first step, and offer the booking link when there is one.
+- If they want a call, ask for a good time and number, or offer two times without stating specific dates.
+- "intent" classifies what they want.`;
+
+const Draft = z.object({
+  reply: z.string(),
+  intent: z.enum(Object.keys(INTENTS) as [keyof typeof INTENTS, ...(keyof typeof INTENTS)[]]),
+});
+
+export type ReplyDraft = { reply: string; intent: keyof typeof INTENTS; source: 'ai' | 'template' };
+
+/** A reply for a person to approve. Falls back to a short template when AI is off or fails. */
+export async function draftReply(ctx: {
+  leadName: string; theyWrote: string; clientName: string; offer: string; whyUs: string; firstStep: string;
+  claimUrl: string; script: string; pricing: string;
+}): Promise<ReplyDraft> {
+  const first = ctx.leadName.trim().split(/\s+/)[0] || 'there';
+  const template = (): ReplyDraft => ({
+    reply: `Hi ${first},\n\nThanks for getting back to me. ${ctx.firstStep ? `The easiest next step is a ${ctx.firstStep.replace(/^(a|an|the)\s+/i, '').replace(/[.\s]+$/, '')}.` : 'Happy to answer any questions.'}${ctx.claimUrl ? ` You can book here: ${ctx.claimUrl}` : ' What time works for a quick call?'}`,
+    intent: 'other', source: 'template',
+  });
+  if (!coachConfigured()) return template();
+  try {
+    const response = await getClient().messages.parse({
+      model: 'claude-opus-5-5',
+      max_tokens: 2000,
+      output_config: { effort: 'low', format: zodOutputFormat(Draft) },
+      system: REPLY_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          `Prospect's name: ${ctx.leadName}`,
+          `Client: ${ctx.clientName}`,
+          `What the client offers: ${ctx.offer || '(not given)'}`,
+          ctx.whyUs && `Why customers pick them:\n${ctx.whyUs}`,
+          ctx.firstStep && `How new customers start: ${ctx.firstStep}`,
+          ctx.claimUrl && `Booking link: ${ctx.claimUrl}`,
+          ctx.pricing && `Pricing facts:\n${ctx.pricing}`,
+          ctx.script && `Client's sales script (for answers to common objections):\n${ctx.script.slice(0, 3000)}`,
+          `What the prospect wrote:\n${ctx.theyWrote.slice(0, 3000)}`,
+        ].filter(Boolean).join('\n\n'),
+      }],
+    });
+    if (response.stop_reason === 'refusal' || !response.parsed_output?.reply.trim()) return template();
+    return { reply: response.parsed_output.reply.trim(), intent: response.parsed_output.intent, source: 'ai' };
+  } catch (err) {
+    console.error('reply draft failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
+    return template();
   }
 }

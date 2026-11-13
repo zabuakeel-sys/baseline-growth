@@ -18,6 +18,7 @@ import { saveAutopilot } from '../onboarding';
 import { query } from '@/lib/db';
 import { placesConfigured } from '@/lib/places';
 import ClientForm from '../ClientForm';
+import MailboxPanel from '../MailboxPanel';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
 import LeadCard from '../../leads/LeadCard';
@@ -100,6 +101,8 @@ export default async function ClientPage({
           </details>
         )}
       </section>
+
+      {isOwner && <MailboxPanel clientId={id} clientName={client.name} />}
 
       <section className="card" aria-labelledby="leads-h">
         <h2 id="leads-h">1. Prospects we are reaching</h2>

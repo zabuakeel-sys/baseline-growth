@@ -6,6 +6,7 @@ import { requireOwner, requireUser } from '@/lib/auth';
 import { CHANNELS, OUTCOMES, applyOutcome } from '@/lib/sales';
 import { parsePercent, parseWholeNumber } from '@/lib/money';
 import { today } from '@/lib/work';
+import { currentStep } from '@/lib/cadence';
 
 type Result = { error?: string };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,12 +31,19 @@ export async function logActivity(leadId: number, back: string, formData: FormDa
   if (!(channel in CHANNELS)) return { error: 'Pick how you reached them.' };
   if (!(outcome in OUTCOMES)) return { error: 'Pick what happened.' };
   if (nextOn && !DATE.test(nextOn)) return { error: 'Next step date must be a date.' };
-  const lead = (await query<{ client_id: number; status: string }>('SELECT client_id, status FROM leads WHERE id = $1', [leadId])).rows[0];
+  const lead = (await query<{ client_id: number; status: string; received_on: string; email: string; phone: string; address: string; cadence_step: number; visits: boolean }>(
+    `SELECT l.client_id, l.status, l.received_on, l.email, l.phone, l.address, l.cadence_step, c.visits
+     FROM leads l JOIN clients c ON c.id = l.client_id WHERE l.id = $1`, [leadId])).rows[0];
   if (!lead) return { error: 'That prospect no longer exists.' };
   if (lead.status === 'opted_out') return { error: 'This prospect asked not to be contacted.' };
 
   const now = today();
   const change = applyOutcome(lead, outcome, now);
+  // A call or visit done now counts as the schedule's call or visit step (even if done early).
+  const step = currentStep(lead, lead, now);
+  if (step && step.channel !== 'email' && (channel === 'call' || channel === 'visit')) {
+    await query('UPDATE leads SET cadence_step = GREATEST(cadence_step, $2) WHERE id = $1', [leadId, step.index + 1]);
+  }
   await query('INSERT INTO activities (lead_id, user_id, channel, outcome, notes) VALUES ($1, $2, $3, $4, $5)',
     [leadId, user.id, channel, outcome, notes]);
   if (change.status === 'won') {

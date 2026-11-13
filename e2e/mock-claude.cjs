@@ -10,7 +10,13 @@ http.createServer((req, res) => {
   req.on('end', () => {
     const b = JSON.parse(body || '{}');
     const log = JSON.parse(fs.readFileSync(LOG, 'utf8')); log.push({ path: req.url, body: b }); fs.writeFileSync(LOG, JSON.stringify(log));
-    const text = JSON.stringify(b.messages?.[0]?.content?.includes('expensive')
+    const sys = String(b.system || '');
+    const content = String(b.messages?.[0]?.content || '');
+    const text = sys.includes('personal first line')
+      ? JSON.stringify({ line: content.includes('4.8') ? 'Saw that your clinic in Troy has a 4.8 rating from 120 reviews.' : '' })
+      : sys.includes('draft a reply')
+      ? JSON.stringify({ reply: 'Hi Pat,\n\nThanks for writing back. The free walkthrough takes about 20 minutes. You can book here: https://libra.example/book', intent: 'wants_meeting' })
+      : JSON.stringify(b.messages?.[0]?.content?.includes('expensive')
       ? { say: 'Totally fair. We quote after a free walkthrough, so you compare real numbers. Does Thursday work?', objection: 'price', why: 'Price objection: move to the free walkthrough.' }
       : { say: 'What would you change about your current cleaning?', objection: 'none', why: 'Open question to find the pain.' });
     res.writeHead(200, { 'Content-Type': 'application/json', 'request-id': 'req_test' });

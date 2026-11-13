@@ -74,6 +74,32 @@ Also: anyone marked "asked not to be contacted" can never be added again, for an
 "This week" lists other tasks. The Revenue Checkup (15 questions, five areas) is an optional
 tool for understanding a new client before agreeing terms.
 
+**The mixed schedule.** Each prospect walks seven steps from the day they were added: email
+(day 0), call (day 1), email (day 3), visit (day 5), email (day 7), call (day 10), email (day 14).
+Emails are queued in the Outbox; calls and visits appear on the assigned rep's Today list. A step
+that cannot be done is skipped (no email address, no phone). Visits happen only for businesses
+answered "yes" to "could a rep stop by?" and prospects with an address; otherwise the visit becomes
+a call. A call or visit nobody logged is skipped after 3 days, or when the next email comes due,
+so emails always go out on their days. Logging a call or visit moves the prospect past that step.
+Any real reply or conversation stops the schedule and a person takes over.
+
+**A mailbox per business.** On each business's page (owner only), connect the address the
+business gave you: Google, Microsoft or other, with an app password. The password is stored
+encrypted with `APP_SECRET` (set it on the server: a long random value; changing it makes saved
+passwords unreadable, so re-enter them). "Test connection" logs in to send and to read. That
+business's outreach goes out from its mailbox, under its own daily limit, and replies are read from
+it. Businesses without one use the shared mailbox (the `SMTP_*`/`IMAP_*` settings), which is also
+used for rep alerts and hand-offs when set. A logo link (answer in the onboarding questions, https
+only) is shown small under the signature in the HTML version of each email.
+
+**AI writing (needs `ANTHROPIC_API_KEY`).** The first email gets one personal opening sentence
+written from the facts found about the prospect (rating, notes); if there is nothing specific and
+true to say, there is no line. When a prospect replies, a reply is drafted from the business's
+offer, reasons, first step, booking link, pricing and script, labelled with what they seem to want,
+and shown under Outbox, Reply drafts. Drafts are never sent without a person pressing Approve &
+send, even in automatic mode. Without the key, the email has no personal line and the draft is a
+short template.
+
 **Automatic sending and replies (Outbox).** Every 5 minutes the server queues messages that are
 due, sends approved ones on weekdays inside the sending hours (default 9 to 17, Michigan time) up
 to a daily cap (default 20), and reads the outreach inbox. Replies are matched to prospects by
@@ -118,6 +144,10 @@ lawyer's sign-off.
     node e2e/autopilot.cjs      # empty system -> questions -> autopilot -> reps' Today (no fixtures)
     node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
+    node e2e/schedule.cjs       # business mailbox, mixed schedule, logo, AI first line and reply drafts.
+                                # App started WITHOUT SMTP_/IMAP_, with APP_SECRET, ANTHROPIC_API_KEY=test-key,
+                                # ANTHROPIC_BASE_URL=http://localhost:3300, OUTREACH_BACKGROUND=off,
+                                # OUTREACH_IGNORE_HOURS=1; IMAP user sales@libra.example / app-pass-1
 
 ## Deploy on Railway
 

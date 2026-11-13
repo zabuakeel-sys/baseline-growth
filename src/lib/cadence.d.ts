@@ -1,0 +1,12 @@
+export type Channel = 'email' | 'call' | 'visit';
+export type Step = { index: number; channel: Channel; due: string; overdueDays: number };
+export const CADENCE: { day: number; channel: Channel }[];
+export const MISSED_AFTER_DAYS: number;
+type LeadLike = { status: string; received_on: string; email: string; phone: string; address: string; cadence_step?: number; touches_sent?: number };
+export function channelFor(step: { channel: Channel }, lead: { email: string; phone: string; address: string }, client: { visits: boolean }): Channel | null;
+export function currentStep(lead: LeadLike, client: { visits: boolean }, today: string): Step | null;
+export function isMissed(step: Step | null, today: string): boolean;
+export function stepLabel(step: { index: number; channel: Channel }, lead: { touches_sent?: number }): string;
+export function stepsLeft(lead: LeadLike, client: { visits: boolean }): { email: number; call: number; visit: number };
+export function emailNumber(index: number, lead: { email: string; phone: string; address: string }, client: { visits: boolean }): number;
+export function isScheduleLabel(text: string): boolean;

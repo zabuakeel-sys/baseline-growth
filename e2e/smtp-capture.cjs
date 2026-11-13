@@ -10,7 +10,7 @@ new SMTPServer({
   onData(stream, session, cb) {
     simpleParser(stream).then((m) => {
       const list = JSON.parse(fs.readFileSync(out, 'utf8'));
-      list.push({ to: m.to?.text, cc: m.cc?.text, from: m.from?.text, subject: m.subject, text: m.text, messageId: m.messageId, inReplyTo: m.inReplyTo || null });
+      list.push({ to: m.to?.text, cc: m.cc?.text, from: m.from?.text, subject: m.subject, text: m.text, messageId: m.messageId, inReplyTo: m.inReplyTo || null, html: m.html || null });
       fs.writeFileSync(out, JSON.stringify(list, null, 2));
       cb();
     }).catch(cb);
