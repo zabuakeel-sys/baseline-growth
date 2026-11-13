@@ -91,7 +91,7 @@ fieldset.area legend { font-weight: 700; font-size: 17px; padding: 0 6px; }
 .tick { width: 28px; height: 28px; min-height: 28px; padding: 0; border-radius: 6px; background: transparent; border: 2px solid var(--muted); color: var(--accent-ink); font-size: 16px; justify-content: center; flex: none; }
 .tasks li.done .tick { background: var(--good); border-color: var(--good); }
 .tasks li.done .task-title { text-decoration: line-through; color: var(--muted); }
-.task-meta { color: var(--muted); font-size: 13px; }
+.task-meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .late { color: var(--bad); font-weight: 600; }
 .pill.late { color: var(--bad); border-color: currentColor; }
 td.up { color: var(--good); }
@@ -161,6 +161,12 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .transcript p { margin: 0 0 4px; }
 .live-dot { color: var(--bad); font-weight: 700; }
 .live-dot::before { content: '\25CF  '; }
+.checklist ul { list-style: none; padding: 0; margin: 0; }
+.checklist li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.checklist li:last-child { border-bottom: 0; }
+.checklist .tickmark { width: 22px; height: 22px; flex: none; border: 2px solid var(--muted); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.checklist li.done .tickmark { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
+.checklist li.done strong { color: var(--muted); font-weight: 400; }
 @media print {
   header.top, .no-print { display: none !important; }
   body { background: #fff; color: #000; }

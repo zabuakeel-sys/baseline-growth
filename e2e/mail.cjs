@@ -34,7 +34,7 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   await p.waitForURL(base + '/today'); await p.goto(base + '/');
 
   // Client setup: offer, contact email; leave the address out at first
-  await p.click('text=LibraPro Facility Services');
+  await p.click('table >> text=LibraPro Facility Services');
   await p.waitForSelector('#leads-h');
   const clientUrl = p.url().split('#')[0].split('?')[0];
   await p.fill('input[name=contact_email]', 'owner@libra.example');
@@ -43,7 +43,7 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   await p.click('text=Save client');
   await p.waitForSelector('p.notice');
   for (const [name, email] of [['Ann Able', 'ann@a.example'], ['Bob Baker', 'bob@b.example'], ['Cy Cole', 'cy@c.example'], ['Di Dunn', 'di@d.example']]) {
-    if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add a prospect")');
+    if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add one by hand")');
     await p.fill('input[name=name]', name);
     await p.fill('input[name=email]', email);
     await p.click('text=Add prospect');

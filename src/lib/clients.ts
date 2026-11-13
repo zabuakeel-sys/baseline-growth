@@ -10,6 +10,7 @@ export type Client = {
   status: Status; monthly_fee_cents: number; bonus_percent: number;
   share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string; call_script: string;
   claim_url: string; claim_label: string; pricing: import('./playbook').Pricing | null;
+  onboarding: unknown; why_us: string; first_step: string; customer_value_cents: number | null; autopilot: boolean; daily_prospects: number;
   contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 

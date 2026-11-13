@@ -6,8 +6,9 @@ import { SCHEDULE_DAYS, isDue, messageFor } from './followup';
 import { addressOf, classifyReply, inSendWindow, remainingToday } from './mailrules';
 import { fetchUnread, mailStatus, sendMail } from './mail';
 import { today } from './work';
+import { runAutopilot } from './autopilotRun';
 
-export type Settings = { auto_send: boolean; daily_limit: number; start_hour: number; end_hour: number; last_run_at: string | null; last_error: string };
+export type Settings = { auto_send: boolean; daily_limit: number; start_hour: number; end_hour: number; last_run_at: string | null; last_error: string; max_searches_per_day: number; last_autopilot: string };
 
 export async function getSettings() {
   return (await query<Settings>('SELECT * FROM outreach_settings WHERE id = 1')).rows[0];
@@ -173,6 +174,15 @@ export async function runOutreach(now = new Date()): Promise<RunReport | null> {
       const notes: string[] = [];
       let report: RunReport = { queued: 0, sent: 0, failed: 0, read: 0, notes };
       try {
+        try {
+          const a = await runAutopilot();
+          notes.push(...a.notes);
+          if (a.searches || a.added) notes.push(`Autopilot: ${a.searches} search${a.searches === 1 ? '' : 'es'}, ${a.added} prospect${a.added === 1 ? '' : 's'} added`);
+          await query('UPDATE outreach_settings SET last_autopilot = $1 WHERE id = 1',
+            [`${new Date().toISOString()}|${a.searches}|${a.added}|${a.notes.join('; ')}`]);
+        } catch (err) {
+          notes.push(`Autopilot failed: ${(err as Error).message}`);
+        }
         // Until a mailbox is connected, prospects stay on the manual copy-and-send flow.
         const queued = mailStatus().send ? await queueDue(settings) : 0;
         const s = await sendApproved(settings, now);

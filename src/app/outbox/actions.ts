@@ -42,12 +42,14 @@ export async function saveSettings(formData: FormData): Promise<Result> {
   const limit = parseWholeNumber(formData.get('daily_limit'));
   const start = parseWholeNumber(formData.get('start_hour'));
   const end = parseWholeNumber(formData.get('end_hour'));
+  const searches = parseWholeNumber(formData.get('max_searches_per_day'));
+  if (searches === null || Number.isNaN(searches) || searches > 500) return { error: 'Searches per day must be 0 to 500.' };
   if (!limit || Number.isNaN(limit) || limit > 200) return { error: 'Daily limit must be 1 to 200.' };
   if (start === null || end === null || Number.isNaN(start) || Number.isNaN(end) || start >= end || end > 24) {
     return { error: 'Sending hours must be a start hour before the end hour, 0 to 24.' };
   }
-  await query('UPDATE outreach_settings SET auto_send = $1, daily_limit = $2, start_hour = $3, end_hour = $4 WHERE id = 1',
-    [autoSend, limit, start, end]);
+  await query('UPDATE outreach_settings SET auto_send = $1, daily_limit = $2, start_hour = $3, end_hour = $4, max_searches_per_day = $5 WHERE id = 1',
+    [autoSend, limit, start, end, searches]);
   // Switching to automatic releases what is already waiting for approval.
   if (autoSend) await query("UPDATE outbox SET status = 'approved', approved_at = now() WHERE status = 'pending'");
   refresh();

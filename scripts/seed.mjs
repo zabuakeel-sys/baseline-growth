@@ -1,4 +1,4 @@
-// Creates the first owner (from OWNER_* env vars) and the starting clients, once.
+// Creates the first owner (from OWNER_* env vars), once.
 // Safe to run repeatedly: it only inserts what is missing.
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
@@ -42,19 +42,7 @@ try {
     }
   }
 
-  // Starting clients are added only into an empty clients table, so a client deleted later
-  // stays deleted instead of coming back on the next deploy.
-  const anyClients = await client.query('SELECT 1 FROM clients LIMIT 1');
-  if (anyClients.rowCount === 0) {
-    const firstClients = [
-      { name: 'LibraPro Facility Services', industry: 'Commercial cleaning (MI and OH)', website: 'https://libraprofs.com' },
-      { name: 'AutoAt', industry: 'Car service marketplace (national)', website: 'https://www.autoat.org' },
-    ];
-    for (const c of firstClients) {
-      await client.query('INSERT INTO clients (name, industry, website) VALUES ($1, $2, $3)', [c.name, c.industry, c.website]);
-      console.log(`client added: ${c.name}`);
-    }
-  }
+  // No starting clients: every business is added through the onboarding questions.
 } finally {
   await client.end();
 }

@@ -5,6 +5,19 @@ share of what those customers spend. The company name is set in `src/lib/config.
 
 ## How it works
 
+**Start here.** The home page lists what is still needed to run (business search key, outreach
+mailbox, a rep, each business's answers). **Add a business** shows the questions to ask the owner
+(what they sell, best customer types, places served, what a customer is worth, how customers
+start, why people pick them, common objections and answers, pricing, the deal terms) and builds
+from the answers: the offer line, the sales script, and a search for every customer type in every
+place. **Autopilot** (on per business) then runs inside the background job: it runs searches that
+are due (never-run first, each refreshed after 30 days, within the daily Google search limit set
+on the Outbox page), adds businesses with a fit score of 60+ and contact details, up to the daily
+number per business and never more than two days' worth untouched, splits them among reps by
+lightest load (owners if there are no reps), and the outbox queues their first emails. Reps open
+Today and work the list. Rules in `src/lib/onboarding.js` and `src/lib/autopilot.js`.
+
+
 0. **Find.** For each client, save what kind of business to look for and where ("independent
    auto repair shop" in "Detroit, MI"), plus names to skip (chains). "Run search" pulls matching
    businesses from Google Places, drops closed, excluded, unreachable and already-known ones,
@@ -89,6 +102,7 @@ lawyer's sign-off.
 
 ## Tests
 
+    # Browser tests other than autopilot expect e2e/fixtures.sql loaded after seeding.
     npm test                    # money rules, outreach schedule and messages, checkup scoring
     node e2e/model.cjs          # full browser run against http://localhost:3100 (needs Playwright
     node e2e/checkup.cjs        # and a freshly migrated + seeded database, owner password
@@ -101,6 +115,7 @@ lawyer's sign-off.
     node e2e/tools.cjs          # rep tools: page + QR, quote, brief, route, partners, referrals, goals, call
     node e2e/mock-claude.cjs &  # stand-in Claude API on :3300; start the app with ANTHROPIC_API_KEY=test-key
     node e2e/coach-ai.cjs       # ANTHROPIC_BASE_URL=http://localhost:3300, then this checks the AI coach
+    node e2e/autopilot.cjs      # empty system -> questions -> autopilot -> reps' Today (no fixtures)
     node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
 

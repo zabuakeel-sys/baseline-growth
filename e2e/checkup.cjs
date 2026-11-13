@@ -13,7 +13,7 @@ const base = 'http://localhost:3100';
   await p.click('button[type=submit]');
   await p.waitForURL(base + '/today'); await p.goto(base + '/');
 
-  await p.click('text=AutoAt');
+  await p.click('table >> text=AutoAt');
   await p.waitForSelector('#checkups-h');
   const clientUrl = p.url();
   await p.click('text=Start checkup');

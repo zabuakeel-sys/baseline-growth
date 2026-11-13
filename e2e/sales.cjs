@@ -32,7 +32,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // LibraPro: 10% for 36 months from this month, a script, three prospects for Rita in two cities
   await o.goto(base + '/');
-  await o.click('text=LibraPro Facility Services');
+  await o.click('table >> text=LibraPro Facility Services');
   await o.waitForSelector('#leads-h');
   const clientUrl = o.url().split('#')[0].split('?')[0];
   const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date()).slice(0, 7);
@@ -50,7 +50,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
     ['Maple Offices', '(248) 555-0102', '20 Elm St, Troy, MI 48084, USA'],
     ['River Clinic', '(313) 555-0103', '30 Oak St, Detroit, MI 48201, USA'],
   ]) {
-    if (!(await o.locator('input[name=address]').isVisible())) await o.click('summary:has-text("Add a prospect")');
+    if (!(await o.locator('input[name=address]').isVisible())) await o.click('summary:has-text("Add one by hand")');
     await o.fill('input[name=name]', name);
     await o.fill('input[name=phone]', phone);
     await o.fill('input[name=address]', address);

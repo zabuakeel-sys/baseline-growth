@@ -14,6 +14,9 @@ import { addTask } from '../../work/actions';
 import { addLead, saveCustomerRevenue } from '../../leads/actions';
 import { saveScript } from '../../sales/actions';
 import { saveRepTools } from '../../tools/actions';
+import { saveAutopilot } from '../onboarding';
+import { query } from '@/lib/db';
+import { placesConfigured } from '@/lib/places';
 import ClientForm from '../ClientForm';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
@@ -41,6 +44,10 @@ export default async function ClientPage({
     listCheckups(id), clientTasks(id), listUsers(), clientLeads(id), clientCustomers(id),
   ]);
   const money = isOwner ? await clientStatement(client) : [];
+  const targets = (await query<{ id: number; what: string; location: string; last_run_at: string | null; last_found: number | null }>(
+    `SELECT id, what, location, to_char(last_run_at AT TIME ZONE 'America/Detroit', 'Mon DD') AS last_run_at, last_found
+     FROM targets WHERE client_id = $1 ORDER BY last_run_at NULLS FIRST, id`, [id])).rows;
+  const addedToday = leads.filter((l) => l.source === 'Research' && l.received_on === today()).length;
   const { saved } = await searchParams;
   const now = today();
   const lastMonth = addMonths(monthOf(now), -1).slice(0, 7);
@@ -64,8 +71,35 @@ export default async function ClientPage({
         {client.industry || 'No industry set'}
         {isOwner && terms && <> · {terms}</>}
       </p>
-      {!client.offer && <p className="muted">Add what {client.name} offers, in one sentence, under Details below. Outreach messages use it.</p>}
       {saved && <p className="notice" role="status">{saved}.</p>}
+
+      <section className="card" aria-labelledby="autopilot-h">
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 id="autopilot-h" style={{ margin: 0 }}>Autopilot {client.autopilot ? <span className="pill signed">On</span> : <span className="pill">Off</span>}</h2>
+          {isOwner && <Link className="button secondary small" href={`/clients/${id}/setup`}>Edit answers</Link>}
+        </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          {client.autopilot
+            ? `Every day it finds businesses that match ${client.name}'s answers, adds up to ${client.daily_prospects} new prospects, splits them among your reps, and starts outreach. Added today: ${addedToday}.`
+            : 'Off: no new prospects are found or added for this business.'}
+          {client.autopilot && !placesConfigured() && ' It cannot search until the Google Places key is added (see the checklist on the Clients page).'}
+        </p>
+        {isOwner && (
+          <ActionForm className="inline-form" action={saveAutopilot.bind(null, id)}>
+            <label className="check"><input type="checkbox" name="autopilot" defaultChecked={client.autopilot} style={{ minHeight: 0 }} /> On</label>
+            <label className="check">New prospects a day <input name="daily_prospects" inputMode="numeric" defaultValue={client.daily_prospects} style={{ width: 70 }} /></label>
+            <button type="submit" className="secondary small">Save</button>
+          </ActionForm>
+        )}
+        {targets.length > 0 && (
+          <details style={{ marginTop: 8 }}>
+            <summary className="muted">{targets.length} searches · {targets.filter((t) => t.last_run_at).length} run so far</summary>
+            <ul className="plain-list" style={{ fontSize: 14 }}>
+              {targets.map((t) => <li key={t.id}>{t.what} in {t.location} <span className="muted">· {t.last_run_at ? `run ${t.last_run_at}, ${t.last_found ?? 0} new` : 'waiting'}</span></li>)}
+            </ul>
+          </details>
+        )}
+      </section>
 
       <section className="card" aria-labelledby="leads-h">
         <h2 id="leads-h">1. Prospects we are reaching</h2>
@@ -78,15 +112,15 @@ export default async function ClientPage({
           </div>
         )}
         {inPlay.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
-        {inPlay.length === 0 && <p className="muted" style={{ marginTop: 0 }}>No prospects in play. Add the people or businesses you will reach for {client.name}.</p>}
+        {inPlay.length === 0 && <p className="muted" style={{ marginTop: 0 }}>No prospects yet. Autopilot adds them and assigns them to reps.</p>}
         {closedProspects.length > 0 && (
           <details>
             <summary className="muted">{closedProspects.length} lost or do not contact</summary>
             {closedProspects.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
           </details>
         )}
-        <details style={{ marginTop: 12 }} open={leads.length === 0}>
-          <summary>Add a prospect</summary>
+        <details style={{ marginTop: 12 }}>
+          <summary className="muted">Add one by hand</summary>
           <AddLeadForm action={addLead.bind(null, id, `/clients/${id}#leads-h`)} users={users} defaultAssignee={user.id} />
         </details>
       </section>

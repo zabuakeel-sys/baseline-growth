@@ -47,7 +47,7 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
         <div>
           <h1>Outbox</h1>
           <p className="sub" style={{ margin: 0 }}>
-            Every few minutes the system queues messages that are due, sends approved ones on weekdays from {settings.start_hour}:00
+            Every few minutes the system runs autopilot (finds and assigns new prospects), queues messages that are due, sends approved ones on weekdays from {settings.start_hour}:00
             to {settings.end_hour}:00 (Michigan time), up to {settings.daily_limit} a day, and reads replies.
           </p>
         </div>
@@ -147,6 +147,7 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
             <label>Most emails per day<input name="daily_limit" inputMode="numeric" defaultValue={settings.daily_limit} /></label>
             <label>Start hour (Michigan time)<input name="start_hour" inputMode="numeric" defaultValue={settings.start_hour} /></label>
             <label>End hour<input name="end_hour" inputMode="numeric" defaultValue={settings.end_hour} /></label>
+            <label>Most Google searches per day (autopilot)<input name="max_searches_per_day" inputMode="numeric" defaultValue={settings.max_searches_per_day} /></label>
             <p className="muted full" style={{ margin: 0, fontSize: 13 }}>
               A new mailbox should start low (around 20 a day) and rise slowly over a few weeks; sending a lot from a new domain
               is a common way to land in spam. That is general practice, not a published rule.

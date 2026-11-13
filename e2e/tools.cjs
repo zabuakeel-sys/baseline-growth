@@ -20,7 +20,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // Client setup: claim link, pricing, script with objection answers
   await o.goto(base + '/');
-  await o.click('text=LibraPro Facility Services');
+  await o.click('table >> text=LibraPro Facility Services');
   await o.waitForSelector('#tools-h');
   const clientUrl = o.url().split('#')[0].split('?')[0];
   const clientId = Number(clientUrl.split('/').pop());

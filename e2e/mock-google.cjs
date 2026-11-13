@@ -18,10 +18,25 @@ http.createServer((req, res) => {
       const b = JSON.parse(body);
       console.log('places request:', b.textQuery, '| key:', req.headers['x-goog-api-key'], '| fields ok:', (req.headers['x-goog-fieldmask'] || '').includes('places.websiteUri'));
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      // Searches for medical and dental businesses get 4 different businesses per query, so
+      // autopilot tests can see many searches add many prospects.
+      if (/dental|clinic|medical/i.test(b.textQuery)) {
+        const city = b.textQuery.split(' in ').pop();
+        const slug = b.textQuery.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const places = [1, 2, 3, 4].map((i) => ({
+          id: `p-${slug}-${i}`, displayName: { text: `${city.split(',')[0]} ${b.textQuery.split(' in ')[0]} ${i}` },
+          formattedAddress: `${i}0 Main St, ${city} 48000, USA`, nationalPhoneNumber: `(248) 555-${String(1000 + slug.length * 10 + i).slice(-4)}`,
+          websiteUri: `${site}/biz/${slug}-${i}`, rating: 4.6, userRatingCount: 40, businessStatus: 'OPERATIONAL',
+        }));
+        res.end(JSON.stringify({ places }));
+        return;
+      }
       res.end(JSON.stringify(b.pageToken === 'page-2' ? page2 : page1));
     });
     return;
   }
+  const biz = req.url.match(/^\/biz\/([a-z0-9-]+)$/);
+  if (biz) { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(`<html><head><title>${biz[1]}</title></head><body>Contact: office@${biz[1]}.example</body></html>`); return; }
   const html = {
     '/dean': '<html><head><title>Al Dean Auto</title><meta name="description" content="Family-owned auto repair in Auburn Hills since 1987"></head><body><a href="/contact">Contact</a></body></html>',
     '/contact': '<html><body>Email us at info@aldeansauto.example or call.</body></html>',

@@ -27,7 +27,7 @@ const base = 'http://localhost:3100';
   await login(p, 'owner@example.test', 'testpassword123');
 
   // LibraPro deal: 10% for 36 months, plus offer and address
-  await p.click('text=LibraPro Facility Services');
+  await p.click('table >> text=LibraPro Facility Services');
   await p.waitForSelector('#leads-h');
   const clientUrl = p.url().split('#')[0].split('?')[0];
   await p.selectOption('select[name=status]', 'active');
@@ -43,7 +43,7 @@ const base = 'http://localhost:3100';
 
   // Prospects
   const add = async (name, email, need) => {
-    if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add a prospect")');
+    if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add one by hand")');
     await p.fill('input[name=name]', name);
     await p.fill('input[name=email]', email);
     await p.fill('input[name=need]', need);
