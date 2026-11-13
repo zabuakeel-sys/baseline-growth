@@ -22,7 +22,7 @@ export const STATUSES = {
   opted_out: 'Do not contact',
 };
 
-export const LOST_REASONS = ['No response', 'Not interested', 'Price', 'Went with someone else', 'Not a fit', 'Timing', 'Other'];
+export const LOST_REASONS = ['No response', 'Not interested', 'Email bounced', 'Price', 'Went with someone else', 'Not a fit', 'Timing', 'Other'];
 
 const addDays = (iso, days) => {
   const d = new Date(`${iso}T12:00:00Z`);

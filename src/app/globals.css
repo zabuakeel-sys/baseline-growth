@@ -116,6 +116,8 @@ header.top nav { flex-wrap: wrap; row-gap: 4px; }
 .candidates input[type=checkbox] { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 .warn-card { border-color: var(--warn); }
 code { font-size: 13px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.reply-text { white-space: pre-wrap; margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--bg); font-size: 14px; }
+blockquote.reply-text .task-meta { display: block; margin-bottom: 4px; }
 @media print {
   header.top, .no-print { display: none !important; }
   body { background: #fff; color: #000; }

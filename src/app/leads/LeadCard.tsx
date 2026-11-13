@@ -4,6 +4,7 @@ import { LOST_REASONS, SCHEDULE_DAYS, STATUSES, messageFor, nextDue } from '@/li
 import { markCustomer, markIntroduced, markLost, markOptedOut, markReplied, markSent, reopenLead } from './actions';
 import ActionForm from '../ActionForm';
 import CopyButton from './CopyButton';
+import { handOverLead } from '../outbox/actions';
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -53,7 +54,19 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
         </p>
       )}
 
-      {message && (
+      {lead.last_reply && lead.last_reply_kind !== 'bounce' && (
+        <blockquote className="reply-text">
+          <span className="task-meta">They wrote:</span>
+          {lead.last_reply.split(/\n\s*On .+wrote:|\n>/)[0].trim().slice(0, 800)}
+        </blockquote>
+      )}
+      {message && (lead.outbox_status === 'pending' || lead.outbox_status === 'approved') && (
+        <p className="task-meta" style={{ margin: '8px 0' }}>
+          {touch === 0 ? 'First message' : `Follow-up ${touch}`} is in the <Link href="/outbox">Outbox</Link>
+          {lead.outbox_status === 'pending' ? ', waiting for approval.' : ', approved; it goes out automatically.'}
+        </p>
+      )}
+      {message && lead.outbox_status !== 'pending' && lead.outbox_status !== 'approved' && (
         <div className="lead-next">
           <div className="task-meta">
             {touch === 0 ? 'First message' : `Follow-up ${touch} of ${SCHEDULE_DAYS.length - 1}`}
@@ -81,6 +94,11 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
       {!closed && (
         <div className="actions lead-actions">
           {reaching && <form action={markReplied.bind(null, lead.id, back)}><button type="submit" className="secondary">They replied</button></form>}
+          {(lead.status === 'talking' || lead.status === 'following_up') && !lead.handed_over_at && (
+            lead.client_contact_email
+              ? <ActionForm action={handOverLead.bind(null, lead.id, back)}><button type="submit">Email to {lead.client_name}</button></ActionForm>
+              : <span className="task-meta">Add a contact email for {lead.client_name} to hand prospects over by email.</span>
+          )}
           {lead.status !== 'introduced' && (
             <details>
               <summary>Introduced to client</summary>

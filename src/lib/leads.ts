@@ -9,6 +9,7 @@ export type Lead = {
   touches_sent: number; first_touch_at: string | null; last_touch_at: string | null;
   assignee_id: number | null; assignee_name: string | null;
   lost_reason: string; closed_on: string | null; introduced_on: string | null; customer_since: string | null; notes: string;
+  outbox_status: string | null; last_reply: string | null; last_reply_kind: string | null; handed_over_at: string | null; client_contact_email: string;
 };
 
 const SELECT = `SELECT l.id, l.client_id, c.name AS client_name, c.offer AS client_offer, c.mailing_address AS client_address,
@@ -17,7 +18,11 @@ const SELECT = `SELECT l.id, l.client_id, c.name AS client_name, c.offer AS clie
   l.touches_sent,
   to_char(l.first_touch_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS first_touch_at,
   to_char(l.last_touch_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_touch_at,
-  l.assignee_id, u.name AS assignee_name, l.lost_reason, l.closed_on, l.introduced_on, l.customer_since, l.notes
+  l.assignee_id, u.name AS assignee_name, l.lost_reason, l.closed_on, l.introduced_on, l.customer_since, l.notes,
+  (SELECT o.status FROM outbox o WHERE o.lead_id = l.id AND o.touch = l.touches_sent AND o.status IN ('pending', 'approved', 'failed')) AS outbox_status,
+  (SELECT r.body FROM replies r WHERE r.lead_id = l.id AND r.kind <> 'auto' ORDER BY r.received_at DESC LIMIT 1) AS last_reply,
+  (SELECT r.kind FROM replies r WHERE r.lead_id = l.id AND r.kind <> 'auto' ORDER BY r.received_at DESC LIMIT 1) AS last_reply_kind,
+  to_char(l.handed_over_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS handed_over_at, c.contact_email AS client_contact_email
   FROM leads l JOIN clients c ON c.id = l.client_id LEFT JOIN users u ON u.id = l.assignee_id`;
 
 /** Prospects still in play: being reached, talking, or introduced and waiting on the client. */
