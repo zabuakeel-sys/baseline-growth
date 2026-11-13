@@ -26,7 +26,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await o.waitForSelector('p.notice');
   const ritaRow = o.locator('tr', { hasText: 'rita@example.test' });
   await ritaRow.locator('input[name=commission_percent]').fill('20');
-  await ritaRow.locator('button:has-text("Save")').click();
+  await ritaRow.locator('form:has(input[name=commission_percent]) button').click();
   await o.waitForFunction(() => [...document.querySelectorAll('tr')].some((r) => r.textContent.includes('rita@') && r.querySelector('input')?.value === '20'));
   const ritaId = Number(psql("SELECT id FROM users WHERE email = 'rita@example.test'"));
 
@@ -73,7 +73,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
     await c.locator(`input[name=channel][value=${channel}]`).check({ force: true });
     await c.locator(`input[name=outcome][value=${outcome}]`).check({ force: true });
     if (notes) await c.locator('input[name=notes]').fill(notes);
-    await c.locator('button:has-text("Save")').first().click();
+    await c.locator('form.log-form button[type=submit]').click();
     await r.waitForSelector(`p.notice:has-text("logged")`);
   };
   await log('Tower Dental', 'call', 'no_answer');

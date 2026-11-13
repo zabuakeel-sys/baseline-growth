@@ -4,6 +4,7 @@ import { hashPassword, requireOwner } from '@/lib/auth';
 import { query } from '@/lib/db';
 import ActionForm from '../ActionForm';
 import { setCommission } from '../sales/actions';
+import { setGoals } from '../tools/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,8 +31,8 @@ async function addMember(formData: FormData): Promise<{ error?: string }> {
 export default async function TeamPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   await requireOwner();
   const { saved } = await searchParams;
-  const { rows } = await query<{ id: number; name: string; email: string; role: string; commission_percent: number }>(
-    "SELECT id, name, email, role, commission_percent FROM users ORDER BY role = 'owner' DESC, name",
+  const { rows } = await query<{ id: number; name: string; email: string; role: string; commission_percent: number; goal_calls: number; goal_visits: number; goal_meetings: number }>(
+    "SELECT id, name, email, role, commission_percent, goal_calls, goal_visits, goal_meetings FROM users ORDER BY role = 'owner' DESC, name",
   );
   return (
     <>
@@ -39,13 +40,21 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       <p className="sub">Team members can run clients and record baselines. Only owners see deal terms and money.</p>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Commission (% of what we earn on their customers)</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Commission (% of what we earn on their customers)</th><th>Daily goals: calls, visits, meetings</th></tr></thead>
           <tbody>{rows.map((u) => (
             <tr key={u.id}>
               <td>{u.name}</td><td>{u.email}</td><td>{u.role}</td>
               <td>
                 <ActionForm className="inline-form" action={setCommission.bind(null, u.id)}>
                   <input name="commission_percent" inputMode="decimal" defaultValue={u.commission_percent} aria-label={`Commission for ${u.name}`} style={{ width: 80 }} />
+                  <button type="submit" className="secondary small">Save</button>
+                </ActionForm>
+              </td>
+              <td>
+                <ActionForm className="inline-form" action={setGoals.bind(null, u.id)}>
+                  <input name="goal_calls" inputMode="numeric" defaultValue={u.goal_calls} aria-label={`Daily calls goal for ${u.name}`} style={{ width: 56 }} />
+                  <input name="goal_visits" inputMode="numeric" defaultValue={u.goal_visits} aria-label={`Daily visits goal for ${u.name}`} style={{ width: 56 }} />
+                  <input name="goal_meetings" inputMode="numeric" defaultValue={u.goal_meetings} aria-label={`Daily meetings goal for ${u.name}`} style={{ width: 56 }} />
                   <button type="submit" className="secondary small">Save</button>
                 </ActionForm>
               </td>

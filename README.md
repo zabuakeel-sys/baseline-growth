@@ -39,6 +39,24 @@ and held, and customers per rep; commission is each rep's percent (set on Team) 
 company has earned on customers they won, counting only client-confirmed amounts. Rules in
 `src/lib/sales.js`.
 
+**Rep tools.** Each open prospect shows a 30-second brief built from known data (what they do,
+rating signals, history, the one question to open with). "Show their page" opens a personal page
+for the business with the client's offer, a QR code and a button to the client's claim or booking
+link, tagged `?ref=bg-<prospect id>`. Clients with pricing rules get an instant quote (price per
+1,000 sq ft per visit by building type, a minimum, a +/- range) that can be saved to the prospect.
+Today groups visits by city with a Google Maps route link (up to 10 stops), shows daily goals and
+a streak, and lists new customers to ask for referrals. **Partners** get a public link
+(`/r/<code>`) to send referrals, guarded by a hidden bot field, a per-address rate limit and the
+do-not-contact list; referrals land on the rep's Today list. **Insights** shows each client's
+funnel and why deals were lost. Rules in `src/lib/playbook.js`.
+
+**Call assistant** (`/call/<prospect id>`). After the rep confirms the prospect agreed to a
+note-taker, the browser's speech recognition transcribes the speakerphone call on the page (no
+audio stored) and the next best line is suggested every few seconds: by Claude when
+`ANTHROPIC_API_KEY` is set (`src/lib/coach.ts`), otherwise from the client's script by matching
+objections. The rep can also type what was said. Speech recognition needs a browser that supports
+it (Chrome works best).
+
 Also: anyone marked "asked not to be contacted" can never be added again, for any client.
 "This week" lists other tasks. The Revenue Checkup (15 questions, five areas) is an optional
 tool for understanding a new client before agreeing terms.
@@ -80,6 +98,9 @@ lawyer's sign-off.
                                 # IMAP_* and OUTREACH_FROM settings, OUTREACH_BACKGROUND=off and
                                 # OUTREACH_IGNORE_HOURS=1
     node e2e/mock-google.cjs &  # stand-in for Google Places on :3200, then start the app with
+    node e2e/tools.cjs          # rep tools: page + QR, quote, brief, route, partners, referrals, goals, call
+    node e2e/mock-claude.cjs &  # stand-in Claude API on :3300; start the app with ANTHROPIC_API_KEY=test-key
+    node e2e/coach-ai.cjs       # ANTHROPIC_BASE_URL=http://localhost:3300, then this checks the AI coach
     node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
 

@@ -2,6 +2,10 @@ import type { Lead } from '@/lib/leads';
 import { CHANNELS, OUTCOMES } from '@/lib/sales';
 import { bookMeeting, logActivity, setMeetingStatus, setNextAction } from './actions';
 import ActionForm from '../ActionForm';
+import Link from 'next/link';
+import { brief } from '@/lib/playbook';
+import { saveQuote } from '../tools/actions';
+import QuoteTool from '../tools/QuoteTool';
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -14,6 +18,20 @@ export default function SalesTools({ lead, back, today }: { lead: Lead; back: st
   const late = lead.next_action_on && lead.next_action_on < today;
   return (
     <div className="sales-tools">
+      <ul className="brief" aria-label="Brief">
+        {brief(lead as unknown as Record<string, unknown>).map((line, i) => <li key={i}>{line}</li>)}
+        {lead.partner_name && <li>Referred by partner: {lead.partner_name}</li>}
+      </ul>
+      <div className="actions">
+        <Link className="button secondary small" href={`/preview/${lead.id}`}>Show their page</Link>
+        <Link className="button secondary small" href={`/call/${lead.id}`}>Call assistant</Link>
+      </div>
+      {lead.client_pricing && lead.client_pricing.types?.length > 0 && (
+        <details>
+          <summary>Instant quote{lead.quote_cents ? ` (last: about ${Math.round(lead.quote_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}/mo)` : ''}</summary>
+          <QuoteTool pricing={lead.client_pricing} action={saveQuote.bind(null, lead.id, back)} />
+        </details>
+      )}
       {lead.next_action_on && (
         <p className={`next-step${late ? ' late' : ''}`}>
           Next: {lead.next_action || 'Follow up'} · {lead.next_action_on === today ? 'today' : late ? `overdue since ${shortDate(lead.next_action_on)}` : shortDate(lead.next_action_on)}

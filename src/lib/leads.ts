@@ -11,6 +11,8 @@ export type Lead = {
   lost_reason: string; closed_on: string | null; introduced_on: string | null; customer_since: string | null; notes: string;
   outbox_status: string | null; last_reply: string | null; last_reply_kind: string | null; handed_over_at: string | null; client_contact_email: string;
   next_action_on: string | null; next_action: string; client_script: string; address: string;
+  rating: number | null; reviews: number | null; partner_id: number | null; partner_name: string | null; referred_by: number | null;
+  referral_asked: boolean; quote_cents: number | null; client_claim_url: string; client_pricing: import('./playbook').Pricing | null;
   activity: { channel: string; outcome: string; notes: string; at: string; by: string | null }[];
   meetings: { id: number; starts_at: string; kind: string; location: string; status: string }[];
 };
@@ -27,6 +29,8 @@ const SELECT = `SELECT l.id, l.client_id, c.name AS client_name, c.offer AS clie
   (SELECT r.kind FROM replies r WHERE r.lead_id = l.id AND r.kind <> 'auto' ORDER BY r.received_at DESC LIMIT 1) AS last_reply_kind,
   to_char(l.handed_over_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS handed_over_at, c.contact_email AS client_contact_email,
   l.next_action_on, l.next_action, c.call_script AS client_script, l.address,
+  l.rating, l.reviews, l.partner_id, (SELECT p.name FROM partners p WHERE p.id = l.partner_id) AS partner_name, l.referred_by,
+  l.referral_asked, l.quote_cents, c.claim_url AS client_claim_url, c.pricing AS client_pricing,
   COALESCE((SELECT json_agg(x) FROM (SELECT a.channel, a.outcome, a.notes, to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at, au.name AS by
             FROM activities a LEFT JOIN users au ON au.id = a.user_id WHERE a.lead_id = l.id ORDER BY a.created_at DESC LIMIT 4) x), '[]') AS activity,
   COALESCE((SELECT json_agg(y ORDER BY y.starts_at) FROM (SELECT m.id, to_char(m.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS starts_at, m.kind, m.location, m.status
@@ -73,4 +77,30 @@ export async function leadsForDay(assigneeId: number | null) {
        ${assigneeId ? 'AND l.assignee_id = $1' : ''} ORDER BY l.next_action_on NULLS LAST, l.received_on, l.id`,
     assigneeId ? [assigneeId] : []);
   return rows;
+}
+
+/** Customers a rep won recently who have not been asked for referrals yet. */
+export async function referralAsksDue(userId: number | null) {
+  const { rows } = await query<Lead>(
+    `${SELECT} WHERE l.status = 'won' AND NOT l.referral_asked AND l.customer_since >= (now() AT TIME ZONE 'America/Detroit')::date - 30
+       ${userId ? 'AND (l.won_by = $1 OR l.assignee_id = $1)' : ''} ORDER BY l.customer_since DESC`,
+    userId ? [userId] : []);
+  return rows;
+}
+
+export async function getLead(id: number) {
+  const { rows } = await query<Lead>(`${SELECT} WHERE l.id = $1`, [id]);
+  return rows[0] ?? null;
+}
+
+/** The client link a prospect is sent to, tagged so the client can see the signup came from us. */
+export function claimLink(base: string, leadId: number) {
+  if (!base) return '';
+  try {
+    const u = new URL(base);
+    u.searchParams.set('ref', `bg-${leadId}`);
+    return u.toString();
+  } catch {
+    return '';
+  }
 }

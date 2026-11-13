@@ -94,8 +94,8 @@ export async function reviewCandidates(formData: FormData): Promise<Result> {
   }
   if (decision !== 'add') return { error: 'Pick add or skip.' };
 
-  const rows = (await query<{ id: number; client_id: number; name: string; phone: string; email: string; about: string; website: string; address: string }>(
-    "SELECT id, client_id, name, phone, email, about, website, address FROM candidates WHERE id = ANY($1) AND status = 'found'", [ids])).rows;
+  const rows = (await query<{ id: number; client_id: number; name: string; phone: string; email: string; about: string; website: string; address: string; rating: number | null; reviews: number | null }>(
+    "SELECT id, client_id, name, phone, email, about, website, address, rating, reviews FROM candidates WHERE id = ANY($1) AND status = 'found'", [ids])).rows;
   let added = 0;
   let blocked = 0;
   for (const c of rows) {
@@ -106,9 +106,9 @@ export async function reviewCandidates(formData: FormData): Promise<Result> {
     if (optedOut.rowCount) { blocked++; await query("UPDATE candidates SET status = 'skipped' WHERE id = $1", [c.id]); continue; }
     const notes = [c.about, c.website].filter(Boolean).join('\n');
     const lead = await query<{ id: number }>(
-      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address)
-       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8) RETURNING id`,
-      [c.client_id, c.name, c.phone, c.email, notes, today(), user.id, c.address]);
+      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address, rating, reviews)
+       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [c.client_id, c.name, c.phone, c.email, notes, today(), user.id, c.address, c.rating, c.reviews]);
     await query("UPDATE candidates SET status = 'added', lead_id = $2 WHERE id = $1", [c.id, lead.rows[0].id]);
     added++;
   }

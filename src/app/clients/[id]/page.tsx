@@ -13,6 +13,7 @@ import { updateClient } from '../actions';
 import { addTask } from '../../work/actions';
 import { addLead, saveCustomerRevenue } from '../../leads/actions';
 import { saveScript } from '../../sales/actions';
+import { saveRepTools } from '../../tools/actions';
 import ClientForm from '../ClientForm';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
@@ -242,6 +243,26 @@ export default async function ClientPage({
             <textarea name="call_script" defaultValue={client.call_script} rows={10} placeholder={`Opening: Hi, this is [name] calling for ${client.name}. Do you have 30 seconds?\n\nQuestions:\n- Who handles ... today?\n- What would you change about it?\n\nIf they say "we're all set": ...\nIf they say "send me something": ...\n\nAsk for: a 15-minute walkthrough this week.`} />
           </label>
           <div className="actions" style={{ marginTop: 8 }}><button type="submit">Save script</button></div>
+        </ActionForm>
+      </section>
+
+      <section className="card" aria-labelledby="tools-h">
+        <h2 id="tools-h">Rep tools</h2>
+        <ActionForm className="grid" action={saveRepTools.bind(null, id)}>
+          <label className="full">Claim or booking link (the QR code on each prospect&apos;s personal page goes here)
+            <input name="claim_url" defaultValue={client.claim_url} placeholder="https://www.example.com/claim-your-shop" />
+          </label>
+          <label>Button text<input name="claim_label" defaultValue={client.claim_label} placeholder="Claim your free listing" /></label>
+          <p className="muted full" style={{ margin: 0, fontSize: 13 }}>
+            Each prospect&apos;s link gets <code>?ref=bg-NUMBER</code> added, so {client.name} can see which signups came from us.
+          </p>
+          <label className="full">Instant quote prices, one building type per line: price for one visit per 1,000 sq ft
+            <textarea name="pricing_lines" rows={4} defaultValue={(client.pricing?.types ?? []).map((t) => `${t.name}: ${(t.ratePer1000Cents / 100).toFixed(2).replace(/\.00$/, '')}`).join('\n')} placeholder={'Office: 45\nMedical: 60\nRetail: 40'} />
+          </label>
+          <label>Minimum monthly price ($)<input name="pricing_minimum" inputMode="decimal" defaultValue={client.pricing?.minimumCents ? String(client.pricing.minimumCents / 100) : ''} /></label>
+          <label>Range shown (+/- %)<input name="pricing_range" inputMode="decimal" defaultValue={client.pricing?.rangePercent ?? 10} /></label>
+          <p className="muted full" style={{ margin: 0, fontSize: 13 }}>Leave prices empty if this client has no instant quote. Get the numbers from the client; reps quote them as estimates.</p>
+          <div className="actions full"><button type="submit">Save rep tools</button></div>
         </ActionForm>
       </section>
 

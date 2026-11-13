@@ -9,6 +9,7 @@ export type Client = {
   contact_name: string; contact_email: string; contact_phone: string;
   status: Status; monthly_fee_cents: number; bonus_percent: number;
   share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string; call_script: string;
+  claim_url: string; claim_label: string; pricing: import('./playbook').Pricing | null;
   contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 

@@ -20,6 +20,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/find">Find</Link>
               <Link href="/leads">Prospects</Link>
               <Link href="/outbox">Outbox</Link>
+              <Link href="/partners">Partners</Link>
+              <Link href="/insights">Insights</Link>
               <Link href="/scoreboard">Scoreboard</Link>
               {user.role === 'owner' && <Link href="/money">Money</Link>}
               {user.role === 'owner' && <Link href="/team">Team</Link>}
