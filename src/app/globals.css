@@ -109,6 +109,13 @@ details form { margin-top: 10px; }
 .lead-actions { margin-top: 10px; align-items: flex-start; }
 .lead-actions details { flex: 1 1 260px; }
 header.top nav { flex-wrap: wrap; row-gap: 4px; }
+.target { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.candidates { list-style: none; margin: 0; padding: 0; }
+.candidates li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.candidates label.check { align-items: flex-start; }
+.candidates input[type=checkbox] { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.warn-card { border-color: var(--warn); }
+code { font-size: 13px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
 @media print {
   header.top, .no-print { display: none !important; }
   body { background: #fff; color: #000; }

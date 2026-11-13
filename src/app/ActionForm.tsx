@@ -26,7 +26,9 @@ export default function ActionForm({
       aria-busy={pending}
       onSubmit={(event) => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
+        // Include the pressed button's name/value, so one form can have several submit buttons.
+        const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+        const data = new FormData(event.currentTarget, submitter);
         startTransition(async () => {
           const result = await action(data);
           setError(result?.error ?? '');

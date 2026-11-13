@@ -16,6 +16,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href="/" className="brand">{APP_NAME}</Link>
             <nav>
               <Link href="/">Clients</Link>
+              <Link href="/find">Find</Link>
               <Link href="/leads">Prospects</Link>
               <Link href="/work">This week</Link>
               {user.role === 'owner' && <Link href="/money">Money</Link>}

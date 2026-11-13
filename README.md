@@ -5,6 +5,13 @@ share of what those customers spend. The company name is set in `src/lib/config.
 
 ## How it works
 
+0. **Find.** For each client, save what kind of business to look for and where ("independent
+   auto repair shop" in "Detroit, MI"), plus names to skip (chains). "Run search" pulls matching
+   businesses from Google Places, drops closed, excluded, unreachable and already-known ones,
+   reads each website for a public contact email and a one-line description, and scores fit
+   0-100. Tick the good ones to make them prospects. Needs `GOOGLE_PLACES_API_KEY` (Google bills
+   per search). Website reads refuse internal network addresses, follow at most 3 redirects and
+   are capped in size and time.
 1. **Prospects.** For each client, add the people or businesses we will reach. Each gets a
    ready-to-send first message built from the client's one-line offer, then follow-ups 3, 7 and
    14 days later until they reply. Copy the message or open it in email, send it, tap "I sent
@@ -42,6 +49,8 @@ lawyer's sign-off.
     node e2e/model.cjs          # full browser run against http://localhost:3100 (needs Playwright
     node e2e/checkup.cjs        # and a freshly migrated + seeded database, owner password
                                 # testpassword123 for owner@example.test)
+    node e2e/mock-google.cjs &  # stand-in for Google Places on :3200, then start the app with
+    node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
 
 ## Deploy on Railway
 
