@@ -16,8 +16,9 @@ http.createServer((req, res) => {
       ? JSON.stringify(content.includes('Nightly office')
         ? { name: 'Shine Cleaning', offer: 'Shine Cleaning does nightly office and medical cleaning across Oakland County.', why_us: 'Same crew every night\nInsured and bonded',
             first_step: 'free walkthrough', who: 'dental office\nmedical clinic', where: 'Troy, MI\nSouthfield, MI',
-            objections: [{ said: 'We already have a cleaner', answer: 'Most of our clients did too; the walkthrough is free.' }] }
-        : { name: '', offer: '', why_us: '', first_step: '', who: '', where: '', objections: [] })
+            objections: [{ said: 'We already have a cleaner', answer: 'Most of our clients did too; the walkthrough is free.' }],
+            contact_name: 'Sam Shine', contact_email: 'sam@shine.example', mailing_address: '1 Shine Way, Troy, MI 48084', pricing: 'Office: 45', local: true }
+        : { name: '', offer: '', why_us: '', first_step: '', who: '', where: '', objections: [], contact_name: '', contact_email: '', mailing_address: '', pricing: '', local: false })
       : sys.includes('personal first line')
       ? JSON.stringify({ line: content.includes('4.8') ? 'Saw that your clinic in Troy has a 4.8 rating from 120 reviews.' : '' })
       : sys.includes('draft a reply')

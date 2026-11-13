@@ -204,7 +204,12 @@ Rules:
 - "who": the types of businesses that buy from them, one per line, specific enough to search on Google Maps (for example "dental office", "medical clinic", "property management company"). If they sell to households rather than businesses, still list what the site names.
 - "where": cities, counties or ZIP codes they serve, one per line, only if the site names them.
 - "objections": up to three things prospects commonly say when turning down this kind of service, with a short honest answer that uses only facts from the site.
-- "name": the business's name as it appears on the site.`;
+- "name": the business's name as it appears on the site.
+- "contact_name": the owner's or manager's name if the site gives one, else empty.
+- "contact_email": the best email on the site for reaching the business (prefer a general or owner address).
+- "mailing_address": the business's street address if the site shows one, written on one line.
+- "pricing": only if the site states prices per square foot or per visit by building type, one per line as "Type: dollars"; otherwise empty.
+- "local": true if they serve a local area (a city, county or region) where visiting prospects in person makes sense; false if they sell nationally or online.`;
 
 const SignupDraft = z.object({
   name: z.string(),
@@ -214,6 +219,11 @@ const SignupDraft = z.object({
   who: z.string(),
   where: z.string(),
   objections: z.array(z.object({ said: z.string(), answer: z.string() })),
+  contact_name: z.string(),
+  contact_email: z.string(),
+  mailing_address: z.string(),
+  pricing: z.string(),
+  local: z.boolean(),
 });
 export type SignupAnswers = z.infer<typeof SignupDraft>;
 

@@ -101,6 +101,9 @@ export async function readSite(website: string) {
     texts.push(`[${new URL(page).pathname}]\n${f.text.slice(0, 6000)}`);
     if (!facts.phones.length) facts.phones = f.phones;
     if (!facts.bookingLink) facts.bookingLink = f.bookingLink;
+    if (!facts.email) facts.email = f.email;
+    if (!facts.address) facts.address = f.address;
+    if (!facts.areas.length) facts.areas = f.areas;
   }
   return { url, facts, text: texts.join('\n\n').slice(0, 30_000) };
 }

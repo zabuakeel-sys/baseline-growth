@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractSite, pagesToRead, visibleText } from '../src/lib/siteread.js';
+import { extractSite, findAddress, pagesToRead, structuredData, visibleText } from '../src/lib/siteread.js';
 
 const html = `<html><head><title>Shine Cleaning | Office Cleaning in Troy, MI</title>
 <meta name="description" content="Nightly office &amp; medical cleaning across Oakland County.">
@@ -27,4 +27,22 @@ test('no logo over plain http, and visible text drops tags', () => {
   const f = extractSite('<img src="http://x.example/logo.png">', 'http://x.example/');
   assert.equal(f.logo, '');
   assert.equal(visibleText('<p>a</p><p>b &amp; c</p>'), 'a\nb & c');
+});
+
+test('reads the business data sites embed for Google', () => {
+  const html = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"x"},
+    {"@type":["LocalBusiness","HomeAndConstructionBusiness"],"name":"Shine Cleaning","telephone":"(248) 555-0101","email":"mailto:Hello@Shine.example",
+     "address":{"@type":"PostalAddress","streetAddress":"1 Shine Way","addressLocality":"Troy","addressRegion":"MI","postalCode":"48084"},
+     "areaServed":["Troy",{"@type":"City","name":"Southfield"}],"logo":{"url":"https://shine.example/logo.png"}}]}</script>`;
+  assert.deepEqual(structuredData(html), { name: 'Shine Cleaning', telephone: '(248) 555-0101', email: 'hello@shine.example',
+    address: '1 Shine Way, Troy, MI 48084', areas: ['Troy', 'Southfield'], logo: 'https://shine.example/logo.png' });
+  assert.deepEqual(structuredData('<script type="application/ld+json">{broken</script>').areas, []);
+});
+
+test('finds a street address and an email written on the page', () => {
+  assert.equal(findAddress('Visit us at 2450 W. Big Beaver Rd, Suite 200, Troy, MI 48084 today'), '2450 W. Big Beaver Rd, Suite 200, Troy, MI 48084');
+  assert.equal(findAddress('Call 248 555 0101'), '');
+  const f = extractSite('<p>Email info@shine.example or 12 Main St, Troy, MI 48084</p>', 'https://shine.example/');
+  assert.equal(f.email, 'info@shine.example');
+  assert.equal(f.address, '12 Main St, Troy, MI 48084');
 });

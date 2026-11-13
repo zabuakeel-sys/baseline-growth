@@ -48,17 +48,19 @@ const site = http.createServer((req, res) => {
   const fromSite = await p.locator('.pill.from-site').count();
   const askOwner = await p.locator('.pill.ask-owner').count();
   console.log(`from website: ${fromSite}, ask the owner: ${askOwner}`);
-  if (fromSite < 9) fail('drafted answers should be marked to check');
-  if (askOwner < 8) fail('owner-only questions should be marked');
+  if (fromSite < 14) fail('drafted answers should be marked to check');
+  if (askOwner > 7) fail('only the answers a website cannot give should be left to ask');
   const sent = JSON.parse(require('fs').readFileSync('/var/tmp/claude-requests.json', 'utf8')).find((r) => String(r.body.system).includes('set up a new client'));
   if (!sent || !sent.body.messages[0].content.includes('Same crew every night')) fail('AI should get the about page text too');
   await p.screenshot({ path: S + '/35-signup-drafted.png', fullPage: true });
 
-  // The owner's answers
-  await p.fill('[name=contact_name]', 'Sam Shine');
-  await p.fill('[name=contact_email]', 'sam@shine.example');
+  if ((await v('contact_name')) !== 'Sam Shine' || (await v('contact_email')) !== 'sam@shine.example') fail('contact not drafted from the site');
+  if ((await v('mailing_address')) !== '1 Shine Way, Troy, MI 48084') fail('address not drafted');
+  if ((await v('pricing')) !== 'Office: 45' || (await v('visits')) !== 'yes') fail('pricing or visits not drafted');
+  const owner = (await p.locator('.pill.ask-owner').allTextContents()).join('|');
+  console.log('still asked:', owner);
+  // Only what a website cannot say is left
   await p.fill('[name=customer_value]', '1200');
-  await p.fill('[name=mailing_address]', '1 Shine Way, Troy, MI 48084');
   await p.fill('[name=share_percent]', '12');
   await p.fill('[name=share_months]', '24');
   await p.click('button:has-text("Set up this business")');

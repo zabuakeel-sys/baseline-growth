@@ -125,7 +125,15 @@ export async function readWebsite(formData: FormData): Promise<Result> {
     claim_url: f.bookingLink,
     logo_url: f.logo,
     objections: ai?.objections ?? [],
+    contact_name: ai?.contact_name ?? '',
+    contact_email: (ai?.contact_email || f.email || '').toLowerCase(),
+    mailing_address: ai?.mailing_address || f.address,
+    pricing: ai?.pricing ?? '',
+    ...(ai ? { visits: ai.local ? 'yes' : 'no' } : {}),
   };
+  if (!answers.where && f.areas.length) answers.where = f.areas.join('\n');
+  // A pricing draft the form cannot read is dropped rather than shown as an error later.
+  if (answers.pricing && parsePricingLines(String(answers.pricing)).errors.length) answers.pricing = '';
   const filled = Object.entries(answers).filter(([k, v]) => k !== 'website' && (Array.isArray(v) ? v.length : String(v ?? '').trim())).map(([k]) => k);
   const id = (await query<{ id: number }>('INSERT INTO onboarding_drafts (website, answers, filled, used_ai) VALUES ($1, $2, $3, $4) RETURNING id',
     [site.url, JSON.stringify(answers), filled, Boolean(ai)])).rows[0].id;
