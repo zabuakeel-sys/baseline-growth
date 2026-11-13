@@ -28,7 +28,15 @@ each sets the obvious next step. The owner sees their own prospects plus unassig
 (on Home or the business page) and presses "Looks good, start sending". From then on its schedule
 sends on its own. "Pause" puts it back to approving each email. Reply drafts always need approval.
 
-**Setting up a business.** **Add a business** shows the questions to ask the owner
+**Setting up a business.** **Add a business** starts with their website. The system reads the
+home page and up to four useful pages (about, services, pricing, areas), with the same network
+safety checks as prospect research. It picks up the name, logo, phone and booking link, and with
+`ANTHROPIC_API_KEY` drafts the offer, reasons customers pick them, first step, customer types,
+places served and common objections, using only what the site says. Drafted answers are marked
+"From their website, check it"; the ones only a person can give are marked "Ask the owner" (who
+gets interested customers, what a customer is worth, who not to contact, visits, mailing address)
+or "From your agreement" (deal terms). The deal terms can be saved as your standard and are then
+pre-filled for the next business. "No website? Fill it in by hand" shows every question
 (what they sell, best customer types, places served, what a customer is worth, how customers
 start, why people pick them, common objections and answers, pricing, the deal terms) and builds
 from the answers: the offer line, the sales script, and a search for every customer type in every
@@ -166,6 +174,7 @@ lawyer's sign-off.
     node e2e/sales.cjs          # sales team: Today, logging, meetings, scoreboard, commission
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
     node e2e/nextup.cjs         # Home to-do list, approve once, Next up queue (APP_SECRET, OUTREACH_BACKGROUND=off)
+    node e2e/signup.cjs         # add a business from its website (mock-claude on :3300, ALLOW_PRIVATE_FETCH=1)
     node e2e/schedule.cjs       # business mailbox, mixed schedule, logo, AI first line and reply drafts.
                                 # App started WITHOUT SMTP_/IMAP_, with APP_SECRET, ANTHROPIC_API_KEY=test-key,
                                 # ANTHROPIC_BASE_URL=http://localhost:3300, OUTREACH_BACKGROUND=off,

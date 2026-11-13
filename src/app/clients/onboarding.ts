@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { query } from '@/lib/db';
 import { requireOwner } from '@/lib/auth';
-import { QUESTIONS, buildScript, buildTargets, missingAnswers, objectionPairs } from '@/lib/onboarding';
+import { QUESTIONS, TERM_KEYS, buildScript, buildTargets, missingAnswers, objectionPairs } from '@/lib/onboarding';
+import { readSite } from '@/lib/research';
+import { draftSignup } from '@/lib/coach';
 import { parsePricingLines } from '@/lib/playbook';
 import { parseDollarsToCents, parsePercent, parseWholeNumber } from '@/lib/money';
 
@@ -67,6 +69,9 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
     await query(`UPDATE clients SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}${rewriteScript ? `, call_script = $${cols.length + 2}` : ''} WHERE id = $${cols.length + 1}`,
       rewriteScript ? [...Object.values(fields), id, script] : [...Object.values(fields), id]);
   }
+  if (clientId === null && formData.get('save_terms') === 'on') {
+    await query('UPDATE outreach_settings SET default_terms = $1 WHERE id = 1', [JSON.stringify(Object.fromEntries(TERM_KEYS.map((k) => [k, get(k)])))]);
+  }
   for (const t of targets) {
     await query(
       `INSERT INTO targets (client_id, what, location, exclude) VALUES ($1, $2, $3, $4)
@@ -88,4 +93,41 @@ export async function saveAutopilot(clientId: number, formData: FormData): Promi
   await query('UPDATE clients SET autopilot = $2, daily_prospects = $3 WHERE id = $1', [clientId, formData.get('autopilot') === 'on', daily]);
   revalidatePath(`/clients/${clientId}`);
   redirect(`/clients/${clientId}?saved=Autopilot+saved#autopilot-h`);
+}
+
+/**
+ * Step 1 of adding a business: read its website and draft every answer the site can give.
+ * The owner checks them and answers the few only the business owner knows.
+ */
+export async function readWebsite(formData: FormData): Promise<Result> {
+  await requireOwner();
+  const raw = String(formData.get('website') ?? '').trim();
+  if (!raw) return { error: 'Type their website, like shinecleaning.com.' };
+  let url: string;
+  try {
+    const u = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (!u.hostname.includes('.') && process.env.ALLOW_PRIVATE_FETCH !== '1') throw new Error();
+    url = u.toString();
+  } catch { return { error: 'That does not look like a website address.' }; }
+  const site = await readSite(url);
+  if (!site) return { error: 'Could not open that website. Check the address, or fill the answers in by hand.' };
+  const ai = await draftSignup(site.text, site.url);
+  const f = site.facts;
+  const answers: Record<string, unknown> = {
+    website: site.url,
+    name: ai?.name || f.siteName,
+    offer: ai?.offer ?? '',
+    why_us: ai?.why_us ?? '',
+    first_step: ai?.first_step ?? '',
+    who: ai?.who ?? '',
+    where: ai?.where ?? '',
+    contact_phone: f.phones[0] ?? '',
+    claim_url: f.bookingLink,
+    logo_url: f.logo,
+    objections: ai?.objections ?? [],
+  };
+  const filled = Object.entries(answers).filter(([k, v]) => k !== 'website' && (Array.isArray(v) ? v.length : String(v ?? '').trim())).map(([k]) => k);
+  const id = (await query<{ id: number }>('INSERT INTO onboarding_drafts (website, answers, filled, used_ai) VALUES ($1, $2, $3, $4) RETURNING id',
+    [site.url, JSON.stringify(answers), filled, Boolean(ai)])).rows[0].id;
+  redirect(`/clients/new?draft=${id}`);
 }

@@ -208,3 +208,5 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .steps li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; background: var(--panel); }
 .steps li.done { border-color: var(--good); color: var(--good); }
 .steps li.now { border-color: var(--accent); border-width: 2px; font-weight: 600; }
+.pill.from-site { color: var(--accent); border-color: currentColor; font-weight: 400; }
+.pill.ask-owner { color: var(--warn); border-color: currentColor; font-weight: 400; }

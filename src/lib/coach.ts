@@ -190,3 +190,48 @@ export async function draftReply(ctx: {
     return template();
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Sign-up: draft a business's answers from its own website. The owner checks every one.
+
+const SIGNUP_SYSTEM = `You help set up a new client for a sales agency. The agency's reps will call, visit and email businesses that could become the client's customers. From the client's own website text, draft the answers below. A person checks every answer before it is used.
+
+Rules:
+- Use ONLY what the website says or clearly shows. Never invent awards, years, guarantees, prices, numbers or claims. If something is not there, return an empty string (or empty list).
+- "offer": one plain sentence a rep could say out loud: what they do and for whom, and where if the site says. No hype words.
+- "why_us": two or three short reasons customers pick them, each on its own line, only reasons the site states.
+- "first_step": how a new customer usually starts, a few words (for example "free walkthrough", "free quote", "demo").
+- "who": the types of businesses that buy from them, one per line, specific enough to search on Google Maps (for example "dental office", "medical clinic", "property management company"). If they sell to households rather than businesses, still list what the site names.
+- "where": cities, counties or ZIP codes they serve, one per line, only if the site names them.
+- "objections": up to three things prospects commonly say when turning down this kind of service, with a short honest answer that uses only facts from the site.
+- "name": the business's name as it appears on the site.`;
+
+const SignupDraft = z.object({
+  name: z.string(),
+  offer: z.string(),
+  why_us: z.string(),
+  first_step: z.string(),
+  who: z.string(),
+  where: z.string(),
+  objections: z.array(z.object({ said: z.string(), answer: z.string() })),
+});
+export type SignupAnswers = z.infer<typeof SignupDraft>;
+
+export async function draftSignup(siteText: string, website: string): Promise<SignupAnswers | null> {
+  if (!coachConfigured() || !siteText.trim()) return null;
+  try {
+    const response = await getClient().messages.parse({
+      model: 'claude-opus-5-5',
+      max_tokens: 4000,
+      output_config: { effort: 'low', format: zodOutputFormat(SignupDraft) },
+      system: SIGNUP_SYSTEM,
+      messages: [{ role: 'user', content: `Website: ${website}\n\nText from the site:\n${siteText}` }],
+    }, { timeout: 60_000 });
+    if (response.stop_reason === 'refusal' || !response.parsed_output) return null;
+    const d = response.parsed_output;
+    return { ...d, objections: d.objections.filter((o) => o.said.trim() && o.answer.trim()).slice(0, 3) };
+  } catch (err) {
+    console.error('sign-up draft failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
+    return null;
+  }
+}

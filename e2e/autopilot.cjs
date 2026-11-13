@@ -38,7 +38,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   }
 
   // Add a business by answering the questions; a missing answer is caught first
-  await o.goto(base + '/clients/new');
+  await o.goto(base + '/clients/new?manual=1');
   const fill = async (k, v) => o.locator(`[name=${k}]`).fill(v);
   await fill('name', 'Shine Co');
   await o.click('text=Set up this business');

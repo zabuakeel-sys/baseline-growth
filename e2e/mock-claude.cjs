@@ -12,7 +12,13 @@ http.createServer((req, res) => {
     const log = JSON.parse(fs.readFileSync(LOG, 'utf8')); log.push({ path: req.url, body: b }); fs.writeFileSync(LOG, JSON.stringify(log));
     const sys = String(b.system || '');
     const content = String(b.messages?.[0]?.content || '');
-    const text = sys.includes('personal first line')
+    const text = sys.includes('set up a new client')
+      ? JSON.stringify(content.includes('Nightly office')
+        ? { name: 'Shine Cleaning', offer: 'Shine Cleaning does nightly office and medical cleaning across Oakland County.', why_us: 'Same crew every night\nInsured and bonded',
+            first_step: 'free walkthrough', who: 'dental office\nmedical clinic', where: 'Troy, MI\nSouthfield, MI',
+            objections: [{ said: 'We already have a cleaner', answer: 'Most of our clients did too; the walkthrough is free.' }] }
+        : { name: '', offer: '', why_us: '', first_step: '', who: '', where: '', objections: [] })
+      : sys.includes('personal first line')
       ? JSON.stringify({ line: content.includes('4.8') ? 'Saw that your clinic in Troy has a 4.8 rating from 120 reviews.' : '' })
       : sys.includes('draft a reply')
       ? JSON.stringify({ reply: 'Hi Pat,\n\nThanks for writing back. The free walkthrough takes about 20 minutes. You can book here: https://libra.example/book', intent: 'wants_meeting' })

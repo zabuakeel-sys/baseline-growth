@@ -82,3 +82,25 @@ export async function eachLimited<T>(items: T[], limit: number, fn: (item: T) =>
     while (i < items.length) await fn(items[i++]);
   }));
 }
+
+/**
+ * Reads a business's website for sign-up: the home page plus up to four useful pages (about,
+ * services, pricing, areas). Returns the facts found and the text, capped for the AI.
+ */
+export async function readSite(website: string) {
+  const { extractSite, pagesToRead } = await import('./siteread');
+  const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+  const home = await fetchPage(url);
+  if (!home) return null;
+  const facts = extractSite(home, url);
+  const texts = [`[Home page]\n${facts.text.slice(0, 8000)}`];
+  for (const page of pagesToRead(facts.links)) {
+    const html = await fetchPage(page);
+    if (!html) continue;
+    const f = extractSite(html, page);
+    texts.push(`[${new URL(page).pathname}]\n${f.text.slice(0, 6000)}`);
+    if (!facts.phones.length) facts.phones = f.phones;
+    if (!facts.bookingLink) facts.bookingLink = f.bookingLink;
+  }
+  return { url, facts, text: texts.join('\n\n').slice(0, 30_000) };
+}
