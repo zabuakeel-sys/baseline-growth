@@ -9,7 +9,7 @@ and (next) checkups, weekly work, monthly results and billing. The company name 
     cp .env.example .env        # fill in DATABASE_URL and the OWNER_* values
     npm install
     npm run migrate             # creates the tables
-    npm run seed                # first owner + the first four clients (safe to rerun)
+    npm run seed                # first owner + starting clients (safe to rerun)
     npm run dev
 
 ## Tests

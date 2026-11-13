@@ -1,4 +1,4 @@
-// Creates the first owner (from OWNER_* env vars) and the first four clients, once.
+// Creates the first owner (from OWNER_* env vars) and the starting clients, once.
 // Safe to run repeatedly: it only inserts what is missing.
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
@@ -42,17 +42,18 @@ try {
     }
   }
 
-  const firstClients = [
-    { name: 'LibraPro Facility Services', industry: 'Commercial cleaning (MI and OH)', website: 'https://libraprofs.com' },
-    { name: 'AutoAt', industry: 'Car service marketplace (national)', website: 'https://www.autoat.org' },
-    { name: 'MAXPRO Fitness', industry: 'Home fitness equipment (online)', website: 'https://maxprofitness.com' },
-    { name: 'Wedding business', industry: 'Weddings', website: '' },
-  ];
-  for (const c of firstClients) {
-    const exists = await client.query('SELECT 1 FROM clients WHERE name = $1', [c.name]);
-    if (exists.rowCount) continue;
-    await client.query('INSERT INTO clients (name, industry, website) VALUES ($1, $2, $3)', [c.name, c.industry, c.website]);
-    console.log(`client added: ${c.name}`);
+  // Starting clients are added only into an empty clients table, so a client deleted later
+  // stays deleted instead of coming back on the next deploy.
+  const anyClients = await client.query('SELECT 1 FROM clients LIMIT 1');
+  if (anyClients.rowCount === 0) {
+    const firstClients = [
+      { name: 'LibraPro Facility Services', industry: 'Commercial cleaning (MI and OH)', website: 'https://libraprofs.com' },
+      { name: 'AutoAt', industry: 'Car service marketplace (national)', website: 'https://www.autoat.org' },
+    ];
+    for (const c of firstClients) {
+      await client.query('INSERT INTO clients (name, industry, website) VALUES ($1, $2, $3)', [c.name, c.industry, c.website]);
+      console.log(`client added: ${c.name}`);
+    }
   }
 } finally {
   await client.end();
