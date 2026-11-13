@@ -20,7 +20,7 @@ has called. The card has a big call button (and directions for visits), "Listen 
 live call assistant), the opening line, what we know, and the full script. Tap what happened (no
 answer, voicemail, gatekeeper, talked, signed up, not interested, wrong number, or book a
 meeting) and the next prospect comes up; the system sets the next step itself. "Skip for now"
-sends one to the back. Meetings show at the top, with Held / No-show once their time has passed;
+sends one to the back. Daily goals and the streak show at the top; new customers come up with a referral ask after the due follow-ups. Meetings show at the top, with Held / No-show once their time has passed;
 each sets the obvious next step. The owner sees their own prospects plus unassigned ones, with
 "Everyone" to see the whole team's. Order rules in `src/lib/queue.js`.
 

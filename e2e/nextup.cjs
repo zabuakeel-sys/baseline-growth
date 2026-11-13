@@ -54,7 +54,9 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   add('Wes New', 'new', 'NULL', '');
   add('Xia Later', 'following_up', `${D} + 3`, 'Call: follow up');
 
+  psql("UPDATE users SET goal_calls = 3 WHERE email = 'owner@example.test'");
   await p.goto(base + '/next');
+  if (!(await p.textContent('.goals')).includes('Calls: 0 of 3')) fail('goal should show on Next up');
   const name = () => p.textContent('#up-name');
   if ((await name()) !== 'Una Reply') fail(`replies come first, got ${await name()}`);
   if (!(await p.locator('.pill:has-text("They replied")').count())) fail('reason label missing');
@@ -81,7 +83,23 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if (psql("SELECT l.status || ' ' || (SELECT count(*) FROM meetings m WHERE m.lead_id = l.id) || ' ' || (SELECT outcome FROM activities a WHERE a.lead_id = l.id) FROM leads l WHERE l.name = 'Vic Due'") !== 'talking 1 meeting_booked') fail('meeting should be booked and logged');
   if (!(await p.locator('.meetings-today').count())) fail('today\'s meeting should show at the top');
   if (!(await p.locator('text=You are done for now').count())) fail('queue should be empty');
+  const goalsNow = await p.textContent('.goals');
+  if (!goalsNow.includes('Calls: 3 of 3') || !goalsNow.includes('1 day')) fail(`goal met and streak expected, got ${goalsNow}`);
   await p.screenshot({ path: S + '/33-next-up-done.png', fullPage: true });
+
+  // A new customer: Next up asks for referrals, and the names become prospects
+  psql(`INSERT INTO leads (client_id, name, phone, received_on, status, customer_since, closed_on, won_by)
+        VALUES (${id}, 'Yara Won', '248-555-0199', ${D} - 20, 'won', ${D} - 2, ${D} - 2, (SELECT id FROM users WHERE email = 'owner@example.test'))`);
+  await p.goto(base + '/next');
+  if ((await name()) !== 'Yara Won' || !(await p.locator('.pill:has-text("Ask for referrals")').count())) fail('referral ask should come up');
+  await p.screenshot({ path: S + '/34-referral-ask.png', fullPage: true });
+  await p.fill('input[name=name1]', 'Zed Friend');
+  await p.fill('input[name=phone1]', '248-555-0177');
+  await p.click('button:has-text("Save referrals")');
+  await p.waitForSelector('p.notice:has-text("referral")');
+  if (psql("SELECT source || ' ' || notes FROM leads WHERE name = 'Zed Friend'") !== 'Referral Referred by Yara Won') fail('referral should be a new prospect');
+  if (psql("SELECT referral_asked FROM leads WHERE name = 'Yara Won'") !== 't') fail('ask should be marked done');
+  if ((await name()) !== 'Zed Friend') fail(`the referral should be up next, got ${await name()}`);
 
   await browser.close();
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL CHECKS PASSED');

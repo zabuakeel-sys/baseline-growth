@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { leadsForDay } from '@/lib/leads';
+import { leadsForDay, referralAsksDue } from '@/lib/leads';
 import { nextQueue, reasonFor } from '@/lib/queue';
-import { brief, routeLink } from '@/lib/playbook';
+import { brief, goalProgress, routeLink, streak } from '@/lib/playbook';
 import { cityOf } from '@/lib/leads';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
 import ActionForm from '../ActionForm';
+import { addReferrals } from '../tools/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,10 +33,10 @@ const BUTTONS: [string, string, string][] = [
 const time = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Detroit' });
 
 /** One prospect at a time, in the order that wins the most business. Log what happened and the next one comes up. */
-export default async function NextUp({ searchParams }: { searchParams: Promise<{ skip?: string; who?: string; saved?: string }> }) {
+export default async function NextUp({ searchParams }: { searchParams: Promise<{ skip?: string; skipask?: string; who?: string; saved?: string }> }) {
   const user = await requireUser();
   const isOwner = user.role === 'owner';
-  const { skip = '', who, saved } = await searchParams;
+  const { skip = '', skipask = '', who, saved } = await searchParams;
   const everyone = isOwner && who === 'all';
   const now = today();
   const all = await leadsForDay(null);
@@ -44,7 +45,7 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
   const skipped = skip.split(',').filter((s) => /^\d+$/.test(s));
   const queue = nextQueue(mine, now, skipped);
   const lead = queue[0];
-  const [done, meetings] = await Promise.all([
+  const [done, meetings, allAsks, me, history] = await Promise.all([
     query<{ n: number }>(
       `SELECT count(*)::int AS n FROM activities WHERE user_id = $1 AND (created_at AT TIME ZONE 'America/Detroit')::date = $2::date`,
       [user.id, now]).then((r) => r.rows[0].n),
@@ -55,8 +56,30 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
        WHERE m.status = 'scheduled' AND (m.starts_at AT TIME ZONE 'America/Detroit')::date <= $1::date
          ${everyone ? '' : 'AND (m.booked_by = $2 OR l.assignee_id = $2)'} ORDER BY m.starts_at`,
       everyone ? [now] : [now, user.id]).then((r) => r.rows),
+    referralAsksDue(everyone ? null : user.id),
+    query<{ goal_calls: number; goal_visits: number; goal_meetings: number }>('SELECT goal_calls, goal_visits, goal_meetings FROM users WHERE id = $1', [user.id]).then((r) => r.rows[0]),
+    query<{ day: string; calls: number; visits: number; meetings: number }>(
+      `SELECT d.day::text AS day,
+         (SELECT count(*)::int FROM activities a WHERE a.user_id = $1 AND a.channel = 'call' AND (a.created_at AT TIME ZONE 'America/Detroit')::date = d.day) AS calls,
+         (SELECT count(*)::int FROM activities a WHERE a.user_id = $1 AND a.channel = 'visit' AND (a.created_at AT TIME ZONE 'America/Detroit')::date = d.day) AS visits,
+         (SELECT count(*)::int FROM meetings m WHERE m.booked_by = $1 AND (m.created_at AT TIME ZONE 'America/Detroit')::date = d.day) AS meetings
+       FROM generate_series($2::date - 60, $2::date, interval '1 day') AS d(day)`, [user.id, now]).then((r) => r.rows),
   ]);
-  const total = done + queue.length;
+  // Goals and streak (set per person on the Team page).
+  const goals = { calls: me?.goal_calls ?? 0, visits: me?.goal_visits ?? 0, meetings: me?.goal_meetings ?? 0 };
+  const days = Object.fromEntries(history.map((h) => [h.day.slice(0, 10), h]));
+  const todayCounts = days[now] ?? { calls: 0, visits: 0, meetings: 0 };
+  const progress = goalProgress(todayCounts, goals);
+  const run = streak(days, goals, now);
+  const hasGoals = !everyone && goals.calls + goals.visits + goals.meetings > 0;
+  // Referral asks come after replies and due follow-ups, before cold new prospects: a happy new
+  // customer is the warmest source of the next one.
+  const skippedAsks = skipask.split(',').filter((x) => /^\d+$/.test(x)).map(Number);
+  const asks = [...allAsks.filter((a) => !skippedAsks.includes(a.id)), ...allAsks.filter((a) => skippedAsks.includes(a.id))];
+  const ask = asks.length && (!queue[0] || reasonFor(queue[0], now) === 'new') ? asks[0] : null;
+  const skipAskHref = ask ? `/next?${new URLSearchParams({ ...(everyone ? { who: 'all' } : {}), ...(skip ? { skip } : {}), skipask: [...skippedAsks, ask.id].join(',') })}` : '';
+  const toGo = queue.length + asks.length;
+  const total = done + toGo;
   const pct = total ? Math.round((done / total) * 100) : 100;
   const back = `/next${everyone ? '?who=all' : ''}`;
   const skipHref = lead ? `/next?${new URLSearchParams({ ...(everyone ? { who: 'all' } : {}), skip: [...skipped, String(lead.id)].join(',') })}` : '';
@@ -71,7 +94,7 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
       <div className="next-top">
         <div>
           <h1 style={{ margin: 0 }}>Next up</h1>
-          <p className="muted" style={{ margin: '2px 0 0' }}>{done} done today · {queue.length} to go</p>
+          <p className="muted" style={{ margin: '2px 0 0' }}>{done} done today · {toGo} to go</p>
         </div>
         {isOwner && (
           <div className="segmented">
@@ -80,7 +103,19 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
           </div>
         )}
       </div>
-      <div className="progress" aria-label={`${pct}% of today done`}><div style={{ width: `${pct}%` }} /></div>
+      {hasGoals ? (
+        <div className="goals" aria-label="Today's goals" style={{ marginTop: 12 }}>
+          {([['calls', 'Calls'], ['visits', 'Visits'], ['meetings', 'Meetings booked']] as const).filter(([k]) => goals[k] > 0).map(([k, label]) => (
+            <div key={k} className={`goal${(progress[k] ?? 0) >= 100 ? ' met' : ''}`}>
+              <div className="label">{label}: <strong>{todayCounts[k]}</strong> of {goals[k]}</div>
+              <div className="bar"><div style={{ width: `${progress[k] ?? 0}%` }} /></div>
+            </div>
+          ))}
+          <div className="goal"><div className="label">Streak</div><strong style={{ fontSize: 20 }}>{run} day{run === 1 ? '' : 's'}</strong></div>
+        </div>
+      ) : (
+        <div className="progress" aria-label={`${pct}% of today done`}><div style={{ width: `${pct}%` }} /></div>
+      )}
       {saved && <p className="notice" role="status">{saved}.</p>}
 
       {meetings.length > 0 && (
@@ -103,7 +138,32 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
         </div>
       )}
 
-      {!lead ? (
+      {ask ? (
+        <article className="card up-card" aria-labelledby="up-name">
+          <div className="up-head">
+            <span className="pill signed">Ask for referrals</span>
+            {toGo > 1 && <Link href={skipAskHref} className="muted small-link">Skip for now</Link>}
+          </div>
+          <h2 id="up-name" className="up-name">{ask.name}</h2>
+          <p className="muted" style={{ margin: 0 }}>New customer of <strong>{ask.client_name}</strong> since {ask.customer_since}</p>
+          <p className="up-why">Happy new customers know others like them. Ask for two names while the win is fresh.</p>
+          {ask.phone && <div className="big-actions"><a className="button big" href={`tel:${ask.phone.replace(/[^\d+]/g, '')}`}>Call {ask.phone}</a></div>}
+          <p className="script-line">&ldquo;Glad it is going well. Who else do you know who could use {ask.client_name}? I&apos;ll mention you sent me.&rdquo;</p>
+          <ActionForm className="grid" action={addReferrals.bind(null, ask.id, back)}>
+            {[1, 2].map((i) => (
+              <div key={i} className="full grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                <label>Name {i}<input name={`name${i}`} /></label>
+                <label>Phone<input name={`phone${i}`} type="tel" /></label>
+                <label>Email<input name={`email${i}`} type="email" /></label>
+              </div>
+            ))}
+            <div className="outcome-buttons full">
+              <button type="submit">Save referrals</button>
+              <button type="submit" className="secondary" formNoValidate>They had no one</button>
+            </div>
+          </ActionForm>
+        </article>
+      ) : !lead ? (
         <div className="card done-card">
           <h2>You are done for now</h2>
           <p className="muted" style={{ margin: 0 }}>
