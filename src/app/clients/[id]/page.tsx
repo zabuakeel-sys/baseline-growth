@@ -12,6 +12,11 @@ import { addTask, saveResult } from '../../work/actions';
 import ClientForm from '../ClientForm';
 import ActionForm from '../../ActionForm';
 import TaskList from '../../work/TaskList';
+import { clientLeads } from '@/lib/leads';
+import { leadStats } from '@/lib/followup';
+import { addLead } from '../../leads/actions';
+import LeadCard from '../../leads/LeadCard';
+import AddLeadForm from '../../leads/AddLeadForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +38,7 @@ export default async function ClientPage({
   const found = await getClient(id);
   if (!found) notFound();
   const { client, baseline } = found;
-  const [checkups, tasks, results, users] = await Promise.all([listCheckups(id), clientTasks(id), clientResults(id), listUsers()]);
+  const [checkups, tasks, results, users, leads] = await Promise.all([listCheckups(id), clientTasks(id), clientResults(id), listUsers(), clientLeads(id)]);
   const money = isOwner ? await clientStatement(client, baseline) : [];
   const { saved } = await searchParams;
   const locked = Boolean(baseline?.signed_off) && !isOwner;
@@ -42,6 +47,20 @@ export default async function ClientPage({
   const doneTasks = tasks.filter((t) => t.done_at);
   const baseRevenue = baseline?.monthly_revenue_cents ?? null;
   const lastMonth = addMonths(monthOf(now), -1).slice(0, 7);
+  const activeLeads = leads.filter((l) => l.status !== 'won' && l.status !== 'lost');
+  const closedLeads = leads.filter((l) => l.status === 'won' || l.status === 'lost');
+  // Lead numbers per month, offered as a hint when entering monthly results.
+  const leadMonths = new Map<string, { inquiries: number; won: number }>();
+  for (const l of leads) {
+    const m = l.received_on.slice(0, 7);
+    const e = leadMonths.get(m) ?? { inquiries: 0, won: 0 };
+    e.inquiries += 1;
+    if (l.status === 'won') e.won += 1;
+    leadMonths.set(m, e);
+  }
+  const lastMonthLeads = leadMonths.get(lastMonth);
+  const stats = leadStats(leads);
+  const back = `/clients/${id}#leads-h`;
 
   return (
     <>
@@ -135,8 +154,32 @@ export default async function ClientPage({
         </details>
       </section>
 
+      <section className="card" aria-labelledby="leads-h">
+        <h2 id="leads-h">4. Inquiries and follow-up</h2>
+        {leads.length > 0 && (
+          <div className="stats">
+            <div className="stat"><div className="label">Inquiries logged</div><div className="value">{stats.total}</div></div>
+            <div className="stat"><div className="label">Win rate</div><div className="value">{stats.winRate === null ? 'None closed' : `${stats.winRate}%`}</div></div>
+            <div className="stat"><div className="label">Won value</div><div className="value">{formatCents(stats.wonValueCents)}</div></div>
+            <div className="stat"><div className="label">Average first reply</div><div className="value">{stats.avgReplyHours === null ? 'None yet' : stats.avgReplyHours < 1 ? `${Math.round(stats.avgReplyHours * 60)} min` : `${stats.avgReplyHours.toFixed(1)} h`}</div></div>
+          </div>
+        )}
+        {activeLeads.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
+        {activeLeads.length === 0 && <p className="muted" style={{ marginTop: 0 }}>No open inquiries. Log each one the moment it comes in.</p>}
+        {closedLeads.length > 0 && (
+          <details>
+            <summary className="muted">{closedLeads.length} won or lost</summary>
+            {closedLeads.map((l) => <LeadCard key={l.id} lead={l} back={back} senderName={user.name} today={now} showClient={false} />)}
+          </details>
+        )}
+        <details style={{ marginTop: 12 }} open={leads.length === 0}>
+          <summary>Log an inquiry</summary>
+          <AddLeadForm action={addLead.bind(null, id, `/clients/${id}`)} users={users} defaultAssignee={user.id} today={now} />
+        </details>
+      </section>
+
       <section className="card" aria-labelledby="results-h">
-        <h2 id="results-h">4. Monthly results</h2>
+        <h2 id="results-h">5. Monthly results</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           Each month, enter the client&apos;s numbers. Growth is that month&apos;s revenue minus the baseline
           {baseRevenue !== null ? ` (${formatCents(baseRevenue)})` : ''}.
@@ -167,6 +210,12 @@ export default async function ClientPage({
         )}
         <details style={{ marginTop: 12 }} open={results.length === 0}>
           <summary>Enter a month</summary>
+          {lastMonthLeads && (
+            <p className="muted" style={{ fontSize: 13 }}>
+              From the inquiry log for {monthLabel(`${lastMonth}-01`)}: {lastMonthLeads.inquiries} inquiries, {lastMonthLeads.won} won.
+              Use the client&apos;s own totals if they differ; not every inquiry may be logged here.
+            </p>
+          )}
           <ActionForm className="grid" action={saveResult.bind(null, id)}>
             <label>Month<input name="month" type="month" defaultValue={lastMonth} required /></label>
             <label>Revenue ($)<input name="revenue" inputMode="decimal" required /></label>
@@ -183,7 +232,7 @@ export default async function ClientPage({
 
       {isOwner && (
         <section className="card" aria-labelledby="money-h">
-          <h2 id="money-h">5. What they owe us</h2>
+          <h2 id="money-h">6. What they owe us</h2>
           {money.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>Not billed yet. Set the status to active, a contract start date and a fee below.</p>
           ) : (

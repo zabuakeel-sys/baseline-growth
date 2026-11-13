@@ -45,7 +45,13 @@ gives the owner a copy. The statements and plan steps live in `src/lib/checkup.j
    each plan month. "This week" lists open tasks, late ones first; tap the box when done.
 4. **Monthly results**: each month's revenue, inquiries and new customers, compared to the
    baseline.
-5. **Money** (owner only): the monthly fee for every month from contract start to contract end
+5. **Follow-ups**: log every inquiry the moment it comes in. Each gets a ready-to-send reply the
+   same day, then follow-ups 1, 3, 7 and 14 days after it arrived, until it is won or lost. Copy
+   the message or open it in email or texts, send it, tap "I sent it". Win rate, won value and
+   average first-reply time show per client. Messages are not sent automatically yet: that needs
+   an email or text provider, each client's sending domain, and legal sign-off for texts. The
+   schedule and messages live in `src/lib/followup.js`.
+6. **Money** (owner only): the monthly fee for every month from contract start to contract end
    (or now), plus the growth bonus = bonus % x (month revenue - baseline revenue), never below
    zero. The bonus is billed only when the client confirmed both the baseline and that month.
    Each month is due on the 15th of the next month and shows as late after that. The rules live
