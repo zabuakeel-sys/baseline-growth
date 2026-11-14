@@ -230,3 +230,6 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .biz-todo { margin-top: 10px; font-size: 13px; color: var(--accent, #4f46e5); font-weight: 600; }
 .settings-group { margin-top: 12px; }
 .settings-group > summary { cursor: pointer; font-weight: 600; padding: 8px 0; color: var(--muted, #667); }
+
+/* Business page: "what needs doing" count pills */
+.work-counts { display: flex; flex-wrap: wrap; gap: 8px; }

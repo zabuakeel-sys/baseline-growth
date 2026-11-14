@@ -5,7 +5,8 @@ import { getClient } from '@/lib/clients';
 import { formatCents } from '@/lib/money';
 import { addMonths, inShareWindow, monthOf, shareCents } from '@/lib/billing';
 import { clientStatement, clientTasks, listUsers, monthLabel, today } from '@/lib/work';
-import { clientCustomers, clientLeads } from '@/lib/leads';
+import { cityOf, clientCustomers, clientLeads, leadsForDay } from '@/lib/leads';
+import { nextQueue, reasonFor } from '@/lib/queue';
 import { leadStats } from '@/lib/followup';
 import { updateClient } from '../actions';
 import { addTask } from '../../work/actions';
@@ -66,6 +67,22 @@ export default async function ClientPage({
   const play = getPlay(client.play);
   const whoTypes = [...new Set(targets.map((t) => t.what))];
   const wherePlaces = [...new Set(targets.map((t) => t.location))];
+  // Once a business is live, the page leads with the work: who to call and visit, and what has gone out.
+  const live = Boolean(client.outreach_approved_at);
+  const dayLeads = (await leadsForDay(null)).filter((l) => l.client_id === id);
+  const queue = nextQueue(dayLeads, now);
+  const dueCounts = { replied: 0, call: 0, visit: 0, new: 0 };
+  for (const l of queue) dueCounts[reasonFor(l, now) as keyof typeof dueCounts]++;
+  const act = (await query<{ emails_sent: number; last_email: string | null; replies: number; calls_visits: number; meetings: number; drafts: number }>(
+    `SELECT
+       (SELECT count(*)::int FROM outbox WHERE client_id = $1 AND status = 'sent') AS emails_sent,
+       (SELECT to_char(max(sent_at) AT TIME ZONE 'America/Detroit', 'Mon DD') FROM outbox WHERE client_id = $1 AND status = 'sent') AS last_email,
+       (SELECT count(*)::int FROM replies r JOIN leads l ON l.id = r.lead_id WHERE l.client_id = $1 AND r.kind = 'reply') AS replies,
+       (SELECT count(*)::int FROM activities a JOIN leads l ON l.id = a.lead_id WHERE l.client_id = $1 AND a.channel IN ('call','visit')) AS calls_visits,
+       (SELECT count(*)::int FROM meetings m JOIN leads l ON l.id = m.lead_id WHERE l.client_id = $1) AS meetings,
+       (SELECT count(*)::int FROM outbox WHERE client_id = $1 AND kind = 'reply' AND status = 'pending') AS drafts`,
+    [id])).rows[0];
+  const REASON_LABEL = { replied: 'Replied, call now', call: 'Follow-up call', visit: 'Visit', new: 'First call' } as const;
   const terms = [
     client.share_percent > 0 && `${client.share_percent}% of what each customer we bring pays${client.share_months ? ` for ${client.share_months} months` : ', for as long as they stay'}`,
     client.signup_fee_cents > 0 && `${formatCents(client.signup_fee_cents)} per new customer`,
@@ -81,7 +98,63 @@ export default async function ClientPage({
         {isOwner && terms && <> · {terms}</>}
       </p>
       {saved && <p className="notice" role="status">{saved}.</p>}
-      {isOwner && steps && (
+
+      {live && (
+        <section className="card" aria-labelledby="work-h">
+          <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+            <h2 id="work-h" style={{ margin: 0 }}>What needs doing</h2>
+            {queue.length > 0 && <Link className="button" href={`/next?client=${id}`}>Work one at a time</Link>}
+          </div>
+          {queue.length === 0 && act.drafts === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>Nothing due right now. New prospects come in through the day, and follow-ups come back on their day.</p>
+          ) : (
+            <>
+              <div className="work-counts">
+                {dueCounts.replied > 0 && <span className="pill reason-replied">{dueCounts.replied} replied</span>}
+                {dueCounts.call > 0 && <span className="pill reason-call">{dueCounts.call} to call</span>}
+                {dueCounts.visit > 0 && <span className="pill reason-visit">{dueCounts.visit} to visit</span>}
+                {dueCounts.new > 0 && <span className="pill reason-new">{dueCounts.new} new to reach</span>}
+                {act.drafts > 0 && <span className="pill">{act.drafts} repl{act.drafts === 1 ? 'y' : 'ies'} to send</span>}
+              </div>
+              <ul className="plain-list" style={{ marginTop: 10 }}>
+                {queue.slice(0, 6).map((l) => {
+                  const r = reasonFor(l, now) as keyof typeof REASON_LABEL;
+                  const tel = l.phone ? `tel:${l.phone.replace(/[^\d+]/g, '')}` : '';
+                  return (
+                    <li key={l.id} style={{ padding: '4px 0' }}>
+                      <span className="muted">{REASON_LABEL[r]}:</span> <strong>{l.name}</strong>
+                      {l.phone && <> · {tel ? <a href={tel}>{l.phone}</a> : l.phone}</>}
+                      {r === 'visit' && cityOf(l.address) ? ` · ${cityOf(l.address)}` : ''}
+                    </li>
+                  );
+                })}
+                {queue.length > 6 && <li className="muted" style={{ padding: '4px 0' }}>and {queue.length - 6} more</li>}
+              </ul>
+              {act.drafts > 0 && <p className="task-meta" style={{ marginTop: 8 }}><Link href="/outbox#drafts-h">Review {act.drafts} drafted repl{act.drafts === 1 ? 'y' : 'ies'} to send</Link></p>}
+            </>
+          )}
+        </section>
+      )}
+
+      {live && (
+        <section className="card" aria-labelledby="activity-h">
+          <h2 id="activity-h" style={{ marginTop: 0 }}>Activity</h2>
+          <div className="stats" style={{ marginBottom: 0 }}>
+            <div className="stat"><div className="label">Emails sent</div><div className="value">{act.emails_sent}{act.last_email && <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> · last {act.last_email}</span>}</div></div>
+            <div className="stat"><div className="label">Replies</div><div className="value">{act.replies}</div></div>
+            <div className="stat"><div className="label">Calls & visits</div><div className="value">{act.calls_visits}</div></div>
+            <div className="stat"><div className="label">Meetings</div><div className="value">{act.meetings}</div></div>
+          </div>
+          {client.autopilot && (
+            <p className="muted" style={{ margin: '10px 0 0', fontSize: 13 }}>
+              New prospects added today: {addedToday}.
+              {autopilotNotes.length > 0 && <span className="error"> Last search: {autopilotNotes.join('. ')}</span>}
+            </p>
+          )}
+        </section>
+      )}
+
+      {isOwner && steps && !live && (
         <ol className="steps" aria-label="Setup">
           {steps.map((st, i) => {
             const now = !st.done && steps.slice(0, i).every((x) => x.done);

@@ -51,7 +51,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if ((await p.textContent('.biz-list')).includes('Review and approve the first email')) fail('approved business should no longer ask for email approval');
   if (!(await p.textContent('.biz-list')).includes('Live')) fail('Home should show LibraPro as live after approval');
   await p.goto(`${base}/clients/${id}`);
-  if (!(await p.locator('.steps li.done').count()) || !(await p.locator('text=Sending is on').count())) fail('business page should show setup steps and sending on');
+  if (!(await p.locator('#work-h').count()) || !(await p.locator('text=Sending is on').count())) fail('live business page should lead with the work panel and show sending on');
 
   // Next up: a reply, a due call, a new prospect, a call not due yet
   const D = "(now() AT TIME ZONE 'America/Detroit')::date";
