@@ -33,9 +33,11 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   // LibraPro: 10% for 36 months from this month, a script, three prospects for Rita in two cities
   await o.goto(base + '/');
   await o.click('.biz-card:has-text("LibraPro Facility Services")');
-  await o.waitForSelector('#leads-h');
+  await o.waitForSelector('h1');
   const clientUrl = o.url().split('#')[0].split('?')[0];
   const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date()).slice(0, 7);
+  await o.goto(clientUrl + '/settings');
+  await o.waitForSelector('#details-h');
   await o.selectOption('select[name=status]', 'active');
   await o.fill('input[name=share_percent]', '10');
   await o.fill('input[name=share_months]', '36');
@@ -45,6 +47,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await o.fill('textarea[name=call_script]', 'Opening: Hi, this is Rita calling for LibraPro.\nAsk for: a free walkthrough this week.');
   await o.click('text=Save script');
   await o.waitForSelector('p.notice:has-text("Script saved")');
+  await o.goto(clientUrl + '/prospects');
+  await o.waitForSelector('#leads-h');
   for (const [name, phone, address] of [
     ['Tower Dental', '(248) 555-0101', '10 Main St, Troy, MI 48084, USA'],
     ['Maple Offices', '(248) 555-0102', '20 Elm St, Troy, MI 48084, USA'],
@@ -88,7 +92,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
     // Talked sets a next step 3 days out, so the card leaves today's list; book from the client page instead.
   }
   const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/Detroit' });
-  await r.goto(clientUrl + '#leads-h');
+  await r.goto(clientUrl + '/prospects');
   const mc = r.locator('article.lead', { hasText: 'Maple Offices' }).first();
   await mc.locator('summary:has-text("Book a meeting")').click();
   await mc.locator('input[name=date]').fill(tomorrow);
@@ -98,7 +102,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await r.waitForSelector('p.notice:has-text("booked")');
   await r.goto(base + '/today');
   if (!(await r.textContent('section[aria-labelledby=meet-h]')).includes('Maple Offices')) fail('meeting should show on Today');
-  await r.goto(clientUrl + '#leads-h');
+  await r.goto(clientUrl + '/prospects');
   await r.locator('article.lead', { hasText: 'Maple Offices' }).first().locator('button:has-text("Held")').click();
   await r.waitForSelector('p.notice:has-text("Meeting updated")');
 

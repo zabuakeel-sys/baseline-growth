@@ -42,7 +42,7 @@ export async function saveRepTools(clientId: number, formData: FormData): Promis
   await query('UPDATE clients SET claim_url = $2, claim_label = $3, pricing = $4 WHERE id = $1',
     [clientId, claimUrl, claimLabel, pricing ? JSON.stringify(pricing) : null]);
   refresh(clientId);
-  redirect(withSaved(`/clients/${clientId}#tools-h`, 'Rep tools saved'));
+  redirect(withSaved(`/clients/${clientId}/settings#tools-h`, 'Rep tools saved'));
 }
 
 /** Saves an instant quote on the prospect and in its notes, so the client sees what was quoted. */

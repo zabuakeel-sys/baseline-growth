@@ -36,7 +36,7 @@ export async function addTask(clientId: number, formData: FormData): Promise<Res
   await query('INSERT INTO tasks (client_id, title, area, assignee_id, due_on) VALUES ($1, $2, $3, $4, $5)',
     [clientId, title, area, assignee, due || null]);
   refresh(clientId);
-  redirect(`/clients/${clientId}?saved=Task+added#tasks-h`);
+  redirect(`/clients/${clientId}/prospects?saved=Task+added#tasks-h`);
 }
 
 /** Marks a task done or reopens it. Plain form post, so it works with one tap. */

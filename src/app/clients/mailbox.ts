@@ -12,7 +12,7 @@ type Result = { error?: string; field?: string };
 const back = (id: number, msg: string): never => {
   revalidatePath(`/clients/${id}`);
   revalidatePath('/outbox');
-  redirect(`/clients/${id}?saved=${encodeURIComponent(msg)}#mailbox-h`);
+  redirect(`/clients/${id}/settings?saved=${encodeURIComponent(msg)}#mailbox-h`);
 };
 const EMAIL = /^[^@\s<>"]+@[^@\s<>"]+\.[^@\s<>"]+$/;
 const HOST = /^[a-z0-9][a-z0-9.-]*$/i;

@@ -134,7 +134,7 @@ export async function saveScript(clientId: number, formData: FormData): Promise<
   const script = String(formData.get('call_script') ?? '').trim();
   await query('UPDATE clients SET call_script = $2 WHERE id = $1', [clientId, script.slice(0, 8000)]);
   refresh(clientId);
-  redirect(withSaved(`/clients/${clientId}#script-h`, 'Script saved'));
+  redirect(withSaved(`/clients/${clientId}/settings#script-h`, 'Script saved'));
 }
 
 export async function setCommission(userId: number, formData: FormData): Promise<Result> {

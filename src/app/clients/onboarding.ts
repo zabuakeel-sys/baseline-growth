@@ -89,9 +89,9 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   }
   revalidatePath('/');
   revalidatePath(`/clients/${id}`);
-  redirect(`/clients/${id}?saved=${encodeURIComponent(clientId === null
-    ? `${fields.name} is set up. Review and approve the first email below, then prospects start coming in`
-    : 'Answers saved')}${clientId === null ? '#approve-h' : ''}`);
+  redirect(clientId === null
+    ? `/clients/${id}/settings?saved=${encodeURIComponent(`${fields.name} is set up. Review and approve the first email, then prospects start coming in`)}#approve-h`
+    : `/clients/${id}/settings?saved=Answers+saved`);
 }
 
 /**
@@ -131,7 +131,7 @@ export async function saveAutopilot(clientId: number, formData: FormData): Promi
   if (daily === null || Number.isNaN(daily) || daily > 500) return { error: 'New prospects per day must be 0 to 500.' };
   await query('UPDATE clients SET autopilot = $2, daily_prospects = $3 WHERE id = $1', [clientId, formData.get('autopilot') === 'on', daily]);
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}?saved=Autopilot+saved#autopilot-h`);
+  redirect(`/clients/${clientId}/settings?saved=Autopilot+saved#autopilot-h`);
 }
 
 /**
