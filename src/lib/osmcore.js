@@ -8,6 +8,30 @@ export function splitQuery(textQuery) {
 }
 
 /**
+ * Tidy a place name so a map lookup can find it: drop "metro area" / "metropolitan" / a leading
+ * "greater", which name a region no gazetteer pins to one point. "Detroit Metro Area, MI" -> "Detroit, MI".
+ * A plain city or "City, ST" is returned unchanged.
+ */
+export function normalizeLocation(location) {
+  let s = String(location);
+  s = s.replace(/\bmetro(politan)?\s+area\b/gi, ' ');
+  s = s.replace(/\bmetro(politan)?\b/gi, ' ');
+  s = s.replace(/^\s*greater\s+/i, '');
+  s = s.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').replace(/,\s*,/g, ',').trim();
+  s = s.replace(/^,+|,+$/g, '').trim();
+  return s;
+}
+
+/** The place names to try for geocoding, best first, without duplicates or blanks. */
+export function geocodeCandidates(location) {
+  const out = [];
+  for (const c of [normalizeLocation(location), String(location).trim()]) {
+    if (c && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+/**
  * The OSM tag filters for a kind of business, by keyword. Each string is an Overpass element filter
  * body (applied to node, way and relation). An unrecognised kind falls back to matching the most
  * significant word against business names across shops, offices and amenities.

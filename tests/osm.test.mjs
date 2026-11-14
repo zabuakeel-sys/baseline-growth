@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { splitQuery, filtersFor, bboxParam, overpassBody, placesFromOverpass } from '../src/lib/osmcore.js';
+import { splitQuery, filtersFor, bboxParam, overpassBody, placesFromOverpass, normalizeLocation, geocodeCandidates } from '../src/lib/osmcore.js';
+
+test('normalizeLocation strips region words that no gazetteer can pin', () => {
+  assert.equal(normalizeLocation('Detroit Metro Area, MI'), 'Detroit, MI');
+  assert.equal(normalizeLocation('Detroit Metropolitan Area, MI'), 'Detroit, MI');
+  assert.equal(normalizeLocation('Greater Boston, MA'), 'Boston, MA');
+  assert.equal(normalizeLocation('Detroit Metro, MI'), 'Detroit, MI');
+  assert.equal(normalizeLocation('New York, NY'), 'New York, NY');
+  assert.equal(normalizeLocation('Troy, MI'), 'Troy, MI');
+});
+
+test('geocodeCandidates tries the tidied name first, then the original, without duplicates', () => {
+  assert.deepEqual(geocodeCandidates('Detroit Metro Area, MI'), ['Detroit, MI', 'Detroit Metro Area, MI']);
+  assert.deepEqual(geocodeCandidates('Troy, MI'), ['Troy, MI']);
+});
 
 test('splitQuery separates what and location on the last " in "', () => {
   assert.deepEqual(splitQuery('auto repair shop in Detroit, MI'), { what: 'auto repair shop', location: 'Detroit, MI' });

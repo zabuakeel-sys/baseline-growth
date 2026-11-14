@@ -6,13 +6,22 @@
 // OSM_NOMINATIM_URL / OSM_OVERPASS_URL point at stand-in servers for tests.
 
 import type { Place } from './places';
-import { splitQuery, filtersFor, bboxParam, overpassBody, placesFromOverpass } from './osmcore.js';
+import { splitQuery, filtersFor, bboxParam, overpassBody, placesFromOverpass, geocodeCandidates } from './osmcore.js';
 
 export { splitQuery };
 
 // A plain, generic client name. Nominatim's usage policy asks for one; it must carry nothing that
 // identifies the user (no name, no email).
 const USER_AGENT = 'BaselineGrowthLeadEngine/1.0';
+
+// Public Overpass instances, tried in turn: the free servers are often briefly busy (502/504/429),
+// so a failover to the next mirror turns a transient outage into a successful search.
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
 
 type Geo = { bbox: string; boundingbox: [string, string, string, string] };
 const geocodeCache = new Map<string, Geo | null>();
@@ -26,21 +35,27 @@ async function geocode(location: string): Promise<Geo> {
     throw new Error(`OpenStreetMap could not find the place "${location}".`);
   }
   const base = process.env.OSM_NOMINATIM_URL || 'https://nominatim.openstreetmap.org/search';
-  const url = `${base}?q=${encodeURIComponent(location)}&format=json&limit=1`;
-  let res: Response;
-  try {
-    res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
-  } catch {
-    throw new Error(`OpenStreetMap did not answer the place lookup for "${location}" in time; it may be busy. Will retry.`);
+  // Try the name as given and a tidied version ("Detroit Metro Area, MI" -> "Detroit, MI").
+  for (const place of geocodeCandidates(location)) {
+    const url = `${base}?q=${encodeURIComponent(place)}&format=json&limit=1`;
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
+    } catch {
+      throw new Error(`OpenStreetMap did not answer the place lookup for "${location}" in time; it may be busy. Will retry.`);
+    }
+    if (!res.ok) throw new Error(`OpenStreetMap lookup for "${location}" returned ${res.status}.`);
+    const data = (await res.json().catch(() => [])) as { boundingbox?: [string, string, string, string] }[];
+    const boundingbox = data[0]?.boundingbox ?? null;
+    const bbox = bboxParam(boundingbox);
+    if (bbox && boundingbox) {
+      const geo: Geo = { bbox, boundingbox };
+      geocodeCache.set(cacheKey, geo);
+      return geo;
+    }
   }
-  if (!res.ok) throw new Error(`OpenStreetMap lookup for "${location}" returned ${res.status}.`);
-  const data = (await res.json().catch(() => [])) as { boundingbox?: [string, string, string, string] }[];
-  const boundingbox = data[0]?.boundingbox ?? null;
-  const bbox = bboxParam(boundingbox);
-  if (!bbox || !boundingbox) { geocodeCache.set(cacheKey, null); throw new Error(`OpenStreetMap could not find the place "${location}". Try a more specific city, like "Detroit, MI".`); }
-  const geo: Geo = { bbox, boundingbox };
-  geocodeCache.set(cacheKey, geo);
-  return geo;
+  geocodeCache.set(cacheKey, null);
+  throw new Error(`OpenStreetMap could not find the place "${location}". Use a specific city, like "Detroit, MI".`);
 }
 
 /** Rough bounding-box area in square degrees, to spot a location too broad for one Overpass query. */
@@ -64,26 +79,43 @@ export async function searchOSM(textQuery: string, maxResults: number): Promise<
   // Ask for more than we need, since many OSM entries have no phone or website and get filtered out.
   const cap = Math.min(200, Math.max(maxResults * 4, 60));
   const body = overpassBody(filters, bbox, cap);
-  const url = process.env.OSM_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
   console.log(`OSM search: "${what}" in "${location}" | bbox ${bbox} | area ${area.toFixed(2)}`);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
-      body: `data=${encodeURIComponent(body)}`,
-      signal: AbortSignal.timeout(55_000),
-    });
-  } catch {
-    throw new Error('OpenStreetMap was too slow to answer this search (the free service is busy). Will retry shortly.');
-  }
-  if (res.status === 429 || res.status === 504) throw new Error('OpenStreetMap is rate-limiting or busy right now. Will retry shortly.');
-  if (!res.ok) throw new Error(`OpenStreetMap search returned ${res.status}. The free map service may be busy; it usually clears in a minute.`);
-  const data = (await res.json().catch(() => ({}))) as { elements?: Parameters<typeof placesFromOverpass>[0]; remark?: string };
-  // Overpass reports server-side timeouts/overload as a 200 with a "remark", not an HTTP error.
-  if ((!data.elements || data.elements.length === 0) && data.remark && /timed out|runtime error|out of memory/i.test(data.remark))
-    throw new Error('OpenStreetMap could not finish this search in time (the free service was busy). Will retry shortly.');
+  const data = await overpassQuery(body);
   const places = placesFromOverpass(data.elements ?? [], maxResults) as Place[];
   console.log(`OSM search: "${what}" in "${location}" -> ${data.elements?.length ?? 0} found, ${places.length} usable`);
   return places;
+}
+
+type OverpassData = { elements?: Parameters<typeof placesFromOverpass>[0]; remark?: string };
+
+/** POST an Overpass query, failing over across the public mirrors when one is busy (502/504/429/timeout). */
+async function overpassQuery(body: string): Promise<OverpassData> {
+  // A single override (tests) replaces the mirror list.
+  const mirrors = process.env.OSM_OVERPASS_URL ? [process.env.OSM_OVERPASS_URL] : OVERPASS_MIRRORS;
+  let lastError = 'OpenStreetMap is busy right now. Will retry shortly.';
+  for (const url of mirrors) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
+        body: `data=${encodeURIComponent(body)}`,
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      lastError = 'OpenStreetMap was too slow to answer (the free service is busy). Will retry shortly.';
+      continue; // this mirror timed out or refused; try the next
+    }
+    // 429/5xx mean this mirror is busy or down: move on to the next.
+    if (res.status === 429 || res.status >= 500) { lastError = `OpenStreetMap mirror returned ${res.status}.`; continue; }
+    if (!res.ok) throw new Error(`OpenStreetMap search returned ${res.status}.`);
+    const data = (await res.json().catch(() => ({}))) as OverpassData;
+    // Overpass reports server-side timeouts/overload as a 200 with a "remark", not an HTTP error.
+    if ((!data.elements || data.elements.length === 0) && data.remark && /timed out|runtime error|out of memory/i.test(data.remark)) {
+      lastError = 'OpenStreetMap could not finish the search in time (the free service was busy). Will retry shortly.';
+      continue;
+    }
+    return data;
+  }
+  throw new Error(lastError);
 }
