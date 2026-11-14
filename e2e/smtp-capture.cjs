@@ -4,9 +4,17 @@ const { simpleParser } = require('mailparser');
 const fs = require('fs');
 const out = process.argv[2];
 fs.writeFileSync(out, '[]');
+fs.writeFileSync(`${out}.auth`, '[]');
 new SMTPServer({
-  secure: false, authOptional: true, disabledCommands: ['STARTTLS'],
-  onAuth(auth, session, cb) { cb(null, { user: auth.username }); },
+  secure: false, authOptional: true, disabledCommands: ['STARTTLS'], authMethods: ['PLAIN', 'LOGIN', 'XOAUTH2'],
+  onAuth(auth, session, cb) {
+    // Records how each login signed in (password or OAuth token), for the Microsoft test.
+    const log = `${out}.auth`;
+    const list = fs.existsSync(log) ? JSON.parse(fs.readFileSync(log, 'utf8')) : [];
+    list.push({ method: auth.method, user: auth.username, accessToken: auth.accessToken || null });
+    fs.writeFileSync(log, JSON.stringify(list));
+    cb(null, { user: auth.username });
+  },
   onData(stream, session, cb) {
     simpleParser(stream).then((m) => {
       const list = JSON.parse(fs.readFileSync(out, 'utf8'));

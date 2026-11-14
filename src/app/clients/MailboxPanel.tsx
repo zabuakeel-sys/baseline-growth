@@ -1,15 +1,16 @@
 import { query } from '@/lib/db';
 import { PROVIDERS } from '@/lib/mail';
 import { secretConfigured } from '@/lib/secret';
+import { microsoftConfigured } from '@/lib/msoauth';
 import { removeMailbox, saveMailbox, testMailbox } from './mailbox';
 import ActionForm from '../ActionForm';
 
-type Box = { from_name: string; email: string; provider: keyof typeof PROVIDERS; smtp_host: string; smtp_port: number; imap_host: string; imap_port: number; daily_limit: number; verified_at: string | null; last_error: string };
+type Box = { auth: string; from_name: string; email: string; provider: keyof typeof PROVIDERS; smtp_host: string; smtp_port: number; imap_host: string; imap_port: number; daily_limit: number; verified_at: string | null; last_error: string };
 
 /** The business's own outreach mailbox: where its emails go out from and where replies are read. Owner only. */
 export default async function MailboxPanel({ clientId, clientName }: { clientId: number; clientName: string }) {
   const box = (await query<Box>(
-    `SELECT from_name, email, provider, smtp_host, smtp_port, imap_host, imap_port, daily_limit, last_error,
+    `SELECT auth, from_name, email, provider, smtp_host, smtp_port, imap_host, imap_port, daily_limit, last_error,
        to_char(verified_at AT TIME ZONE 'America/Detroit', 'Mon DD, HH12:MI AM') AS verified_at
      FROM client_mailboxes WHERE client_id = $1`, [clientId])).rows[0];
   return (
@@ -17,12 +18,20 @@ export default async function MailboxPanel({ clientId, clientName }: { clientId:
       <h2 id="mailbox-h">Mailbox</h2>
       <p className="muted" style={{ marginTop: 0 }}>
         The address {clientName} gave you for outreach. Emails for {clientName} go out from it and replies are read from it.
-        Use an <strong>app password</strong> (Google: Account, Security, App passwords; Microsoft: Security info, App password), never the normal one.
+        <strong>Microsoft 365 / Outlook:</strong> use the Connect with Microsoft button (no password).{' '}
+        <strong>Google:</strong> use an app password from myaccount.google.com/apppasswords, never the normal password.
       </p>
+      <div className="actions" style={{ marginBottom: 12 }}>
+        {microsoftConfigured()
+          ? <a className="button secondary" href={`/oauth/microsoft/start?client=${clientId}${box?.provider === 'microsoft' ? `&hint=${encodeURIComponent(box.email)}` : ''}`}>
+              {box?.auth === 'oauth' ? 'Reconnect with Microsoft' : 'Connect with Microsoft'}
+            </a>
+          : <span className="muted" style={{ fontSize: 13 }}>Connect with Microsoft needs MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET and MICROSOFT_TENANT_ID in Railway.</span>}
+      </div>
       {!secretConfigured() && <p className="error">APP_SECRET is not set on the server, so passwords cannot be saved. Add it in Railway (a long random value).</p>}
       {box && (
         <p>
-          <strong>{box.email}</strong> <span className="muted">· signed &quot;{box.from_name}&quot; · up to {box.daily_limit} a day</span>{' '}
+          <strong>{box.email}</strong> <span className="muted">· {box.auth === 'oauth' ? 'connected with Microsoft · ' : ''}signed &quot;{box.from_name}&quot; · up to {box.daily_limit} a day</span>{' '}
           {box.verified_at
             ? <span className="pill signed">Connected {box.verified_at}</span>
             : <span className="pill missing">Not tested</span>}
@@ -36,7 +45,7 @@ export default async function MailboxPanel({ clientId, clientName }: { clientId:
         </div>
       )}
       <details open={!box}>
-        <summary><strong>{box ? 'Change mailbox' : 'Connect a mailbox'}</strong></summary>
+        <summary><strong>{box ? 'Change mailbox (password)' : 'Connect with an app password (Google or other)'}</strong></summary>
         <ActionForm className="grid" action={saveMailbox.bind(null, clientId)}>
           <label>Provider
             <select name="provider" defaultValue={box?.provider ?? 'google'}>

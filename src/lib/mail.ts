@@ -11,7 +11,8 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { query } from './db';
-import { decrypt } from './secret';
+import { decrypt, encrypt } from './secret';
+import { accessToken } from './msoauth';
 
 export type MailAccount = {
   key: string; // cache key: 'shared' or 'client:<id>'
@@ -20,6 +21,7 @@ export type MailAccount = {
   smtp: { host: string; port: number; secure: boolean; user: string; pass: string };
   imap: { host: string; port: number; secure: boolean; user: string; pass: string } | null;
   dailyLimit: number | null; // null = the shared outreach limit applies
+  oauth?: { refreshToken: string }; // "Connect with Microsoft": sign in with a token, no password
 };
 
 const env = (k: string) => process.env[k] ?? '';
@@ -53,15 +55,27 @@ export function sharedAccount(): MailAccount | null {
 type MailboxRow = {
   client_id: number; from_name: string; email: string; smtp_host: string; smtp_port: number; smtp_secure: boolean;
   imap_host: string; imap_port: number; imap_secure: boolean; username: string; password_enc: string; daily_limit: number;
+  auth: 'password' | 'oauth'; refresh_token_enc: string;
 };
 
 function fromRow(r: MailboxRow): MailAccount {
-  const pass = decrypt(r.password_enc);
+  const oauth = r.auth === 'oauth';
+  const pass = oauth ? '' : decrypt(r.password_enc);
   return {
     key: `client:${r.client_id}`, clientId: r.client_id, from: `${r.from_name.replace(/["<>]/g, '')} <${r.email}>`, dailyLimit: r.daily_limit,
     smtp: { host: r.smtp_host, port: r.smtp_port, secure: r.smtp_secure, user: r.username, pass },
     imap: { host: r.imap_host, port: r.imap_port, secure: r.imap_secure, user: r.username, pass },
+    ...(oauth ? { oauth: { refreshToken: decrypt(r.refresh_token_enc) } } : {}),
   };
+}
+
+/** The access token for an OAuth mailbox (refreshed when needed; a rotated refresh token is saved). */
+async function tokenFor(a: MailAccount) {
+  if (!a.oauth) return null;
+  return accessToken(a.key, a.oauth.refreshToken, async (next) => {
+    a.oauth = { refreshToken: next };
+    if (a.clientId) await query('UPDATE client_mailboxes SET refresh_token_enc = $2 WHERE client_id = $1', [a.clientId, encrypt(next)]);
+  });
 }
 
 /** A client's own mailbox, or null when it has none (or its password cannot be read). */
@@ -87,13 +101,15 @@ export async function outreachAccount(clientId: number) {
 
 const transports = new Map<string, { sig: string; t: Transporter }>();
 const tlsOpts = () => (env('MAIL_ALLOW_SELF_SIGNED') === '1' ? { rejectUnauthorized: false } : undefined);
-function transportFor(a: MailAccount) {
-  const sig = JSON.stringify(a.smtp);
+async function transportFor(a: MailAccount) {
+  const token = await tokenFor(a);
+  const sig = JSON.stringify(a.smtp) + (token ?? '');
   const cached = transports.get(a.key);
   if (cached && cached.sig === sig) return cached.t;
   const t = nodemailer.createTransport({
     host: a.smtp.host, port: a.smtp.port, secure: a.smtp.secure,
-    auth: { user: a.smtp.user, pass: a.smtp.pass }, tls: tlsOpts(),
+    auth: token ? { type: 'OAuth2', user: a.smtp.user, accessToken: token } : { user: a.smtp.user, pass: a.smtp.pass },
+    tls: tlsOpts(),
   });
   transports.set(a.key, { sig, t });
   return t;
@@ -108,7 +124,7 @@ export async function sendMail(
 ) {
   if (!account) throw new Error('No mailbox is connected for sending.');
   const messageId = `<${randomUUID()}@${domainOf(account.from)}>`;
-  await transportFor(account).sendMail({
+  await (await transportFor(account)).sendMail({
     from: account.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), messageId,
     ...(m.inReplyTo ? { inReplyTo: m.inReplyTo, references: m.inReplyTo } : {}),
   });
@@ -120,17 +136,18 @@ export type Incoming = {
   text: string; headers: Record<string, string>; date: Date;
 };
 
-function imapClient(a: MailAccount) {
+async function imapClient(a: MailAccount) {
   if (!a.imap) throw new Error('This mailbox has no reading settings.');
+  const token = await tokenFor(a);
   return new ImapFlow({
     host: a.imap.host, port: a.imap.port, secure: a.imap.secure,
-    auth: { user: a.imap.user, pass: a.imap.pass }, logger: false, tls: tlsOpts(),
+    auth: token ? { user: a.imap.user, accessToken: token } : { user: a.imap.user, pass: a.imap.pass }, logger: false, tls: tlsOpts(),
   });
 }
 
 /** Reads every unread message in the account's inbox and marks it read. */
 export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
-  const client = imapClient(account);
+  const client = await imapClient(account);
   await client.connect();
   const out: Incoming[] = [];
   const lock = await client.getMailboxLock('INBOX');
@@ -161,15 +178,27 @@ export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
 /** Checks that a mailbox can log in to send and to read. Throws with a readable reason. */
 export async function verifyAccount(account: MailAccount) {
   try {
-    await transportFor(account).verify();
+    await (await transportFor(account)).verify();
   } catch (err) {
-    throw new Error(`Sending login failed: ${(err as Error).message}`);
+    throw new Error(explainMailError(`Sending login failed: ${(err as Error).message}`));
   }
   try {
-    const c = imapClient(account);
+    const c = await imapClient(account);
     await c.connect();
     await c.logout();
   } catch (err) {
-    throw new Error(`Reading login failed: ${(err as Error).message}`);
+    throw new Error(explainMailError(`Reading login failed: ${(err as Error).message}`));
   }
+}
+
+/** Adds what to do for the mailbox errors people actually hit. */
+export function explainMailError(msg: string) {
+  if (/SmtpClientAuthentication|5\.7\.139/i.test(msg)) {
+    return `${msg} Fix: in the Microsoft 365 admin center, open Users, Active users, this person, Mail, "Manage email apps", and tick "Authenticated SMTP".`;
+  }
+  if (/AADSTS65001|consent/i.test(msg)) return `${msg} Fix: an admin needs to grant consent for the app in the Azure portal (App registrations, API permissions, "Grant admin consent").`;
+  if (/AADSTS7000215|AADSTS7000222|client secret/i.test(msg)) return `${msg} Fix: the MICROSOFT_CLIENT_SECRET in Railway is wrong or expired; make a new one in the Azure portal.`;
+  if (/AADSTS50011|redirect/i.test(msg)) return `${msg} Fix: add this site's /oauth/microsoft/callback address under Authentication in the Azure portal.`;
+  if (/535.*5\.7\.8|BadCredentials/i.test(msg)) return `${msg} For Google, use an app password, not the normal one.`;
+  return msg;
 }

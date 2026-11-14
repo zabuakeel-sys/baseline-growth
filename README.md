@@ -121,6 +121,16 @@ it. Businesses without one use the shared mailbox (the `SMTP_*`/`IMAP_*` setting
 used for rep alerts and hand-offs when set. A logo link (answer in the onboarding questions, https
 only) is shown small under the signature in the HTML version of each email.
 
+**Connect with Microsoft.** Microsoft 365 mailboxes no longer accept passwords from outside apps,
+so they connect with a button instead: the owner signs in to Microsoft and approves, and the
+system stores an encrypted refresh token (no password) and signs in to send and read with
+short-lived tokens. Needs an app registration in the Azure portal with the redirect address
+`https://<this site>/oauth/microsoft/callback`, delegated permissions `SMTP.Send` and
+`IMAP.AccessAsUser.All` (Office 365 Exchange Online) plus `offline_access`, `openid`, `email`,
+and `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` in Railway. The mailbox
+also needs "Authenticated SMTP" allowed in the Microsoft 365 admin center. Google mailboxes use an
+app password.
+
 **AI writing (needs `ANTHROPIC_API_KEY`).** The first email gets one personal opening sentence
 written from the facts found about the prospect (rating, notes); if there is nothing specific and
 true to say, there is no line. When a prospect replies, a reply is drafted from the business's
@@ -175,6 +185,7 @@ lawyer's sign-off.
     node e2e/find.cjs           # GOOGLE_PLACES_API_KEY=test-key PLACES_API_URL=http://localhost:3200/places ALLOW_PRIVATE_FETCH=1
     node e2e/nextup.cjs         # Home to-do list, approve once, Next up queue (APP_SECRET, OUTREACH_BACKGROUND=off)
     node e2e/signup.cjs         # add a business from its website (mock-claude on :3300, ALLOW_PRIVATE_FETCH=1)
+    node e2e/microsoft.cjs      # Connect with Microsoft against e2e/mock-microsoft.cjs (:3500); see the file for settings
     node e2e/schedule.cjs       # business mailbox, mixed schedule, logo, AI first line and reply drafts.
                                 # App started WITHOUT SMTP_/IMAP_, with APP_SECRET, ANTHROPIC_API_KEY=test-key,
                                 # ANTHROPIC_BASE_URL=http://localhost:3300, OUTREACH_BACKGROUND=off,

@@ -6,8 +6,9 @@ import { setupSteps } from '@/lib/setup';
 export const dynamic = 'force-dynamic';
 
 /** Every business we sell for: where it is in setup, and what it has produced. */
-export default async function Businesses() {
+export default async function Businesses({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const user = await requireUser();
+  const { saved } = await searchParams;
   const isOwner = user.role === 'owner';
   const clients = await listClients();
   const rows = await Promise.all(clients.map(async (c) => {
@@ -24,6 +25,7 @@ export default async function Businesses() {
         </div>
         {isOwner && <Link className="button" href="/clients/new">Add a business</Link>}
       </div>
+      {saved && <p className="notice" role="status">{saved}.</p>}
       <div className="card table-wrap">
         {clients.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>No businesses yet. {isOwner ? <Link href="/clients/new">Add your first one</Link> : 'The owner adds them.'}</p>

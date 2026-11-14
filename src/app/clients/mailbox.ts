@@ -7,7 +7,7 @@ import { PROVIDERS, clientAccount, verifyAccount } from '@/lib/mail';
 import { encrypt, secretConfigured } from '@/lib/secret';
 import { parseWholeNumber } from '@/lib/money';
 
-type Result = { error?: string };
+type Result = { error?: string; field?: string };
 const back = (id: number, msg: string): never => {
   revalidatePath(`/clients/${id}`);
   revalidatePath('/outbox');
@@ -39,8 +39,8 @@ export async function saveMailbox(clientId: number, formData: FormData): Promise
   const smtpSecure = provider === 'other' ? smtpPort === 465 : preset.smtp_secure;
   const imapSecure = provider === 'other' ? imapPort === 993 : preset.imap_secure;
   const password = String(formData.get('password') ?? '');
-  const existing = (await query<{ password_enc: string }>('SELECT password_enc FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
-  if (!password && !existing) return { error: 'Add the app password.' };
+  const existing = (await query<{ password_enc: string; auth: string }>('SELECT password_enc, auth FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
+  if (!password && (!existing || (existing.auth === 'oauth' && provider !== 'microsoft'))) return { error: 'Add the app password.', field: 'password' };
   // Google shows app passwords in groups ("abcd efgh ijkl mnop"); the spaces are not part of it.
   const isGoogle = provider === 'google' || /gmail\.com$|google\.com$/i.test(smtpHost);
   const passwordEnc = password ? encrypt(isGoogle ? password.replace(/\s+/g, '') : password) : existing.password_enc;
@@ -48,8 +48,10 @@ export async function saveMailbox(clientId: number, formData: FormData): Promise
     `INSERT INTO client_mailboxes (client_id, from_name, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, daily_limit)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $3, $11, $12)
      ON CONFLICT (client_id) DO UPDATE SET from_name = $2, email = $3, provider = $4, smtp_host = $5, smtp_port = $6, smtp_secure = $7,
-       imap_host = $8, imap_port = $9, imap_secure = $10, username = $3, password_enc = $11, daily_limit = $12, verified_at = NULL, last_error = ''`,
-    [clientId, fromName, email, provider, smtpHost, smtpPort, smtpSecure, imapHost, imapPort, imapSecure, passwordEnc, limit]);
+       imap_host = $8, imap_port = $9, imap_secure = $10, username = $3, password_enc = $11, daily_limit = $12, verified_at = NULL, last_error = '',
+       auth = CASE WHEN $13 THEN 'password' ELSE client_mailboxes.auth END,
+       refresh_token_enc = CASE WHEN $13 THEN '' ELSE client_mailboxes.refresh_token_enc END`,
+    [clientId, fromName, email, provider, smtpHost, smtpPort, smtpSecure, imapHost, imapPort, imapSecure, passwordEnc, limit, Boolean(password)]);
   return back(clientId, 'Mailbox saved. Press "Test connection" to check it');
 }
 
@@ -62,7 +64,7 @@ export async function testMailbox(clientId: number): Promise<Result> {
     await verifyAccount(account);
   } catch (err) {
     await query('UPDATE client_mailboxes SET verified_at = NULL, last_error = $2 WHERE client_id = $1', [clientId, (err as Error).message.slice(0, 500)]);
-    return { error: `${(err as Error).message}. For Google and Microsoft, use an app password, not the normal one.` };
+    return { error: (err as Error).message };
   }
   await query("UPDATE client_mailboxes SET verified_at = now(), last_error = '' WHERE client_id = $1", [clientId]);
   return back(clientId, 'Connected: the system can send and read this mailbox');
