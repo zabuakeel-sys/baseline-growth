@@ -270,7 +270,7 @@ const OutreachEmail = z.object({ subject: z.string(), body: z.string() });
 
 export async function writeOutreachEmail(ctx: {
   leadName: string; about: string; need: string; city: string; rating: number | null; reviews: number | null;
-  clientName: string; offer: string; whyUs: string; firstStep: string; claimUrl: string; goal: string; touch: number;
+  clientName: string; offer: string; whyUs: string; firstStep: string; claimUrl: string; goal: string; touch: number; template?: string;
 }): Promise<{ subject: string; body: string } | null> {
   if (!coachConfigured()) return null;
   try {
@@ -290,6 +290,7 @@ export async function writeOutreachEmail(ctx: {
           `Sending on behalf of: ${ctx.clientName}`,
           `What ${ctx.clientName} offers: ${ctx.offer || '(not given)'}`,
           ctx.whyUs && `Why people choose ${ctx.clientName}:\n${ctx.whyUs}`,
+          ctx.template && `The owner wrote this email as the GUIDE. Keep its message, its offer, any link in it, and its sign-off exactly. Rewrite it naturally for THIS specific prospect: use their real name and city, and you may tailor the opening sentence to them. Keep about the same length. Do NOT add any unsubscribe line, mailing address, or footer (those are added automatically):\n"""\n${ctx.template}\n"""`,
           ctx.goal && `THE GOAL to drive toward in this email (most important, overrides the generic first step if they differ):\n${ctx.goal}`,
           `The one thing to ask them to do (the first step): ${ctx.firstStep || 'a quick reply to learn more'}`,
           ctx.claimUrl && `Link for that first step: ${ctx.claimUrl}`,

@@ -15,13 +15,12 @@ export default async function ApprovePanel({ client, back }: { client: Client; b
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        This is the <strong>first</strong> email every prospect gets (not a follow-up). Edit it until it is exactly right.
-        These placeholders fill in for each shop: <code>[First name]</code>, <code>[Shop Name]</code>, <code>[City]</code>,{' '}
-        <code>[{client.name}]</code>, and a claim link (write <code>[claim your free account]</code> and it becomes your booking link).
-        You can sign off however you like. If you leave out the opt-out line and mailing address, they are added automatically for you
-        (US law requires them); if you write <code>[Unsubscribe]</code> or <code>[Business mailing address]</code>, those fill in instead.
-        Follow-ups are shorter and go out on their own.
-        {draft.source === 'ai' && ' This starting draft was written by AI from your answers and goal; make it yours.'}
+        This is your <strong>first</strong> email (not a follow-up). It is the guide for every shop: no two get the identical email.
+        When AI is connected, each one is rewritten for that shop, with their real name and city, keeping your message, your link, and your
+        sign-off. These placeholders fill in either way: <code>[First name]</code> (or &quot;Hi there,&quot; when there is no name),{' '}
+        <code>[Shop Name]</code>, <code>[City]</code>, <code>[{client.name}]</code>, and a claim link (write{' '}
+        <code>[claim your free account]</code> and it becomes your booking link). Sign off however you like. The opt-out line and mailing
+        address are added automatically if you leave them out (US law requires them).
       </p>
 
       <ActionForm action={saveOutreachEmail.bind(null, client.id, back)}>
