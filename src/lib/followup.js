@@ -116,17 +116,35 @@ export function leadStats(leads) {
   };
 }
 
+export const OPT_OUT_LINE = 'If you\'d rather not hear from us, reply "no thanks" and we won\'t contact you again.';
+
 /**
- * Fills the owner's perfected email template for one prospect. Replaces {first_name}, {name} and
- * {business}; adds a greeting if the owner didn't write one. Used for the first email when the
- * owner has written a custom one.
+ * Fills the owner's perfected email template for one prospect. Understands both [Square bracket]
+ * and {curly} placeholders: first name, the prospect's shop/business name, city, the client's name
+ * (platform/business), the claim link, the mailing address, and unsubscribe. Adds a greeting if the
+ * owner didn't write one. The legal footer is handled separately by ensureFooter.
  */
-export function fillEmail(text, { firstName = '', name = '', clientName = '' } = {}) {
+export function fillEmail(text, { firstName = '', name = '', city = '', clientName = '', claimUrl = '', address = '' } = {}) {
   const first = firstName || greetingName(name) || 'there';
-  let out = String(text || '')
-    .replace(/\{\s*first[_ ]?name\s*\}/gi, first)
-    .replace(/\{\s*name\s*\}/gi, name || first)
-    .replace(/\{\s*(business|client|company|shop)\s*\}/gi, clientName || '');
+  let out = String(text || '');
+  const sub = (re, val) => { out = out.replace(re, val); };
+  sub(/\[\s*first[_ ]?name\s*\]|\{\s*first[_ ]?name\s*\}/gi, first);
+  sub(/\[\s*(shop(\s*name)?|business\s*name|their\s*name|prospect)\s*\]|\{\s*(shop|shop_name|prospect)\s*\}/gi, name || first);
+  sub(/\[\s*city\s*\]|\{\s*city\s*\}/gi, city || 'your area');
+  sub(/\[\s*(platform|our\s*(app|platform|product|service)|company|client)\s*\]|\{\s*(platform|business|company|client)\s*\}/gi, clientName || '');
+  sub(/\[[^\]]*\bclaim\b[^\]]*\]|\{\s*(claim(_?link)?|link|url)\s*\}/gi, claimUrl || '');
+  sub(/\[[^\]]*\b(mailing\s*)?address\b[^\]]*\]|\{\s*(mailing_?)?address\s*\}/gi, (address || '').trim());
+  sub(/\[[^\]]*\bunsubscribe\b[^\]]*\]|\{\s*unsubscribe\s*\}|\[[^\]]*\bopt[\s-]?out\b[^\]]*\]/gi, OPT_OUT_LINE);
+  sub(/\{\s*name\s*\}/gi, name || first);
   if (!/^\s*(hi|hey|hello|dear)\b/i.test(out)) out = `Hi ${first},\n\n${out.trim()}`;
   return out.trim();
+}
+
+/** Makes sure an opt-out and the mailing address are present (US law), without duplicating them. */
+export function ensureFooter(body, { address = '' } = {}) {
+  let out = String(body || '').trim();
+  if (!/no thanks|unsubscribe|opt[\s-]?out|rather not hear/i.test(out)) out += `\n\n${OPT_OUT_LINE}`;
+  const addr = (address || '').trim();
+  if (addr && !out.includes(addr)) out += `\n${addr}`;
+  return out;
 }

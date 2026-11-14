@@ -41,10 +41,13 @@ export async function starterEmail(c: Client): Promise<{ subject: string; body: 
   });
   const token = new RegExp(TOKEN, 'gi');
   if (written) return { subject: written.subject.replace(token, '{first_name}'), body: written.body.replace(token, '{first_name}'), source: 'ai' };
-  // No AI: a plain editable starter built from the answers, with the placeholder.
-  const step = c.first_step ? ` The first step is ${c.first_step.replace(/[.\s]+$/, '')}${c.claim_url ? `: ${c.claim_url}` : ''}.` : '';
-  const body = `Hi {first_name},\n\n${c.offer || `We work with ${c.name}.`}${step}\n\nWould this be worth a quick look?`;
-  return { subject: `Quick question from ${c.name}`, body, source: 'template' };
+  // No AI: a plain editable first-contact starter, with placeholders the owner can keep or change.
+  const ask = c.first_step ? c.first_step.replace(/[.\s]+$/, '') : 'get started';
+  const link = c.claim_url ? `\n\n[${ask}]` : '';
+  const body = `Hi [First name],\n\n${c.offer || `I'm reaching out from ${c.name}.`} I don't think [Shop Name] is set up with us yet.`
+    + `\n\nIf you'd like this for your shop, you can ${ask} here:${link || ` just reply and I'll send the details.`}`
+    + `\n\nIf someone else handles this, feel free to forward it to them.`;
+  return { subject: `Claim your free ${c.name} account`, body, source: 'template' };
 }
 
 /** The email to approve: the first one actually queued for this business, or an AI-written sample. */

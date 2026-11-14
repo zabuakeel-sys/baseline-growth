@@ -63,3 +63,20 @@ test('fillEmail replaces placeholders and adds a greeting if missing', async () 
   assert.equal(fillEmail('We can help.', { name: 'Dana Lee' }), 'Hi Dana,\n\nWe can help.');
   assert.equal(fillEmail('Hello {name}.', { name: 'Sam' }), 'Hello Sam.');
 });
+
+test('fillEmail handles bracket placeholders, claim link, and ensureFooter adds the legal line', async () => {
+  const { fillEmail, ensureFooter } = await import('../src/lib/followup.js');
+  const tmpl = 'Hi [First name],\n\nAutoAt helps [Shop Name] in [City]. Claim here:\n[Claim your free shop account]\n\nThanks,\nZain';
+  const filled = fillEmail(tmpl, { name: 'Tower Dental', city: 'Troy', clientName: 'AutoAt', claimUrl: 'https://autoat.app/claim' });
+  assert.match(filled, /Hi there,/);                       // no contact name -> generic greeting
+  assert.match(filled, /helps Tower Dental in Troy/);
+  assert.match(filled, /Claim here:\nhttps:\/\/autoat\.app\/claim/);
+  assert.match(filled, /Thanks,\nZain$/);                   // keeps the owner's own sign-off
+  const withFooter = ensureFooter(filled, { address: '1 Main St, Troy, MI' });
+  assert.match(withFooter, /no thanks/);
+  assert.match(withFooter, /1 Main St, Troy, MI$/);
+  // does not duplicate when the owner already included them
+  const already = ensureFooter('Body\n\nreply "no thanks" to stop.\n1 Main St, Troy, MI', { address: '1 Main St, Troy, MI' });
+  assert.equal((already.match(/no thanks/g) || []).length, 1);
+  assert.equal((already.match(/1 Main St/g) || []).length, 1);
+});

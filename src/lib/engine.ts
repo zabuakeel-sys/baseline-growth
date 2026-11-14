@@ -5,7 +5,7 @@
 // Each prospect follows the mixed schedule in cadence.js: emails are queued here and sent from the
 // client's own mailbox (or the shared one); calls and visits go on the assigned rep's Today list.
 import { pool, query } from './db';
-import { fillEmail, messageFor, signOff } from './followup';
+import { ensureFooter, fillEmail, messageFor, signOff } from './followup';
 import { CADENCE, currentStep, emailNumber, isMissed, isScheduleLabel, stepLabel } from './cadence';
 import { toHtml } from './emailhtml';
 import { addressOf, classifyReply, inSendWindow, remainingToday } from './mailrules';
@@ -75,8 +75,10 @@ async function queueDue(settings: Settings) {
         let body: string;
         // The owner's perfected first email wins; otherwise AI writes one; otherwise the template.
         if (l.touches_sent === 0 && l.outreach_subject.trim() && l.outreach_body.trim()) {
-          subject = fillEmail(l.outreach_subject, { name: l.name, clientName: l.client_name }).replace(/\n+/g, ' ').trim();
-          body = fillEmail(l.outreach_body, { name: l.name, clientName: l.client_name }) + sign;
+          const ctx = { name: l.name, city: cityOf(l.address), clientName: l.client_name, claimUrl: l.claim_url, address: l.mailing_address };
+          subject = fillEmail(l.outreach_subject, ctx).replace(/\n+/g, ' ').trim();
+          // The owner's email keeps its own sign-off; only the legal opt-out + address are guaranteed.
+          body = ensureFooter(fillEmail(l.outreach_body, ctx), { address: l.mailing_address });
         } else {
           const written = await writeOutreachEmail({
             leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,

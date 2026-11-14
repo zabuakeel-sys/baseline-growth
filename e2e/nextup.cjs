@@ -38,7 +38,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   // Write and perfect the email on the business page, then start sending (two separate steps).
   await p.goto(`${base}/clients/${id}#approve-h`);
   await p.waitForSelector('#approve-h');
-  if (!(await p.inputValue('textarea[name=body]')).includes('{first_name}')) fail('starter email should use the {first_name} placeholder');
+  if (!/\[First name\]|{first_name}/.test(await p.inputValue('textarea[name=body]'))) fail('starter email should use a first-name placeholder');
   await p.fill('input[name=subject]', 'Claim your free listing');
   await p.fill('textarea[name=body]', 'Hi {first_name},\n\nQuick note about LibraPro for your shop. Want in?');
   await p.click('button:has-text("Save email")');

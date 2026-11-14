@@ -14,4 +14,6 @@ export function signOff(ctx: { clientName: string; senderName?: string; address?
 export function leadStats(leads: { status: string; touches_sent: number; lost_reason?: string; introduced_on?: string | null }[]): {
   total: number; reached: number; replied: number; introduced: number; customers: number; customerRate: number | null;
 };
-export function fillEmail(text: string, ctx: { firstName?: string; name?: string; clientName?: string }): string;
+export const OPT_OUT_LINE: string;
+export function fillEmail(text: string, ctx: { firstName?: string; name?: string; city?: string; clientName?: string; claimUrl?: string; address?: string }): string;
+export function ensureFooter(body: string, ctx?: { address?: string }): string;
