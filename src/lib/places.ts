@@ -23,21 +23,30 @@ export const placesConfigured = () => Boolean(process.env.GOOGLE_PLACES_API_KEY)
 
 /** True when Google refused the key for this API (not enabled / not permitted), so the other API is worth a try. */
 const isNotEnabled = (err: unknown) => /\b403\b|PERMISSION_DENIED|REQUEST_DENIED|SERVICE_DISABLED|not been used|disabled/i.test((err as Error).message);
+/** True when the new API is over its (often tiny) daily quota, so the older API's quota is worth a try. */
+const isQuota = (err: unknown) => /\b429\b|RESOURCE_EXHAUSTED|Quota exceeded|OVER_QUERY_LIMIT|rateLimitExceeded/i.test((err as Error).message);
 
-/** Search, preferring Places API (New); on a "not enabled" refusal, retry with the older Places API. */
+/**
+ * Search, preferring Places API (New). If the key is not enabled for it, or the new API is over its
+ * daily quota (common when it is capped at ~100/day while the project's older Places API has the
+ * real quota, which is what the Kacity apps use), fall back to the older Places API.
+ */
 export async function searchPlaces(textQuery: string, maxResults: number): Promise<Place[]> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) throw new Error('GOOGLE_PLACES_API_KEY is not set.');
   try {
     return await searchNew(textQuery, maxResults, key);
   } catch (err) {
-    if (!isNotEnabled(err)) throw err;
+    if (!isNotEnabled(err) && !isQuota(err)) throw err;
     try {
       return await searchLegacy(textQuery, maxResults, key);
     } catch (legacyErr) {
-      // Neither API accepted the key: report both so the fix is clear.
+      // Neither API worked: report clearly so the fix is obvious.
       if (isNotEnabled(legacyErr)) {
-        throw new Error('Google refused this key for both Places APIs. In Google Cloud, enable "Places API (New)" for the key (APIs & Services, Library), or allow it under the key\'s API restrictions.');
+        throw new Error(`Google refused this key for the older Places API too. Set the key's API restrictions to "Don't restrict key" (or add "Places API"), so it can use the same Places API the Kacity apps use. (New API said: ${(err as Error).message.slice(0, 120)})`);
+      }
+      if (isQuota(legacyErr) && isQuota(err)) {
+        throw new Error('Both Places APIs are over quota on this Google project. Link a paid billing account to the project (the current one is limited to ~100 searches a day).');
       }
       throw legacyErr;
     }
