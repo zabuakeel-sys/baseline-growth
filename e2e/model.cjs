@@ -27,7 +27,7 @@ const base = 'http://localhost:3100';
   await login(p, 'owner@example.test', 'testpassword123');
 
   // LibraPro deal: 10% for 36 months, plus offer and address
-  await p.goto(base + '/');
+  await p.goto(base + '/clients');
   await p.click('.biz-card:has-text("LibraPro Facility Services")');
   await p.waitForURL(/\/clients\/\d+$/);
   const clientUrl = p.url().split('#')[0].split('?')[0];
@@ -134,7 +134,7 @@ const base = 'http://localhost:3100';
   console.log('opted out:', await p.textContent('p.error'));
 
   // Dashboard counts
-  await p.goto(base + '/');
+  await p.goto(base + '/clients');
   const card = (await p.textContent('.biz-card:has-text("LibraPro Facility Services")')).replace(/\s+/g, ' ');
   console.log('LibraPro card:', card);
   if (!/1 in play/.test(card) || !/1 customers/.test(card)) fail(`business counts wrong: ${card}`);

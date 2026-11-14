@@ -133,13 +133,33 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
       </div>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
+      {!clientId && meetings.length > 0 && (
+        <div className="card meetings-today" style={{ marginBottom: 20 }}>
+          <strong>Meetings today</strong>
+          <ul className="plain-list" style={{ marginTop: 8 }}>
+            {meetings.map((m) => (
+              <li key={m.id} style={{ padding: '6px 0' }}>{time(m.starts_at)} · {m.kind} with <strong>{m.lead_name}</strong> ({m.client_name}){m.location ? ` · ${m.location}` : ''}
+                {m.phone && <> · <a href={`tel:${m.phone.replace(/[^\d+]/g, '')}`}>{m.phone}</a></>}
+                {new Date(m.starts_at) < new Date() && (
+                  <span className="actions" style={{ marginLeft: 8, gap: 6 }}>
+                    <span className="muted">How did it go?</span>
+                    <form action={setMeetingStatus.bind(null, m.id, 'held', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0 }}>Held</button></form>
+                    <form action={setMeetingStatus.bind(null, m.id, 'no_show', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0 }}>No-show</button></form>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {ask ? (
         <article className="focus" aria-labelledby="up-name">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="r-tag r-new"><span className="d"></span>Ask for referrals</span>
             {toGo > 1 && <Link href={skipAskHref} className="muted" style={{ fontSize: 13 }}>Skip for now</Link>}
           </div>
-          <div className="who" id="up-name">{ask.name}</div>
+          <div className="who"><span id="up-name">{ask.name}</span></div>
           <p className="muted" style={{ margin: '2px 0 0' }}>New customer of <strong>{ask.client_name}</strong> since {ask.customer_since}</p>
           {ask.phone && <div className="callrow"><a className="call" href={`tel:${ask.phone.replace(/[^\d+]/g, '')}`}><CallIcon /> Call {ask.phone}</a></div>}
           <div className="opener"><div className="q">Say this</div><p>&ldquo;Glad it is going well. Who else do you know who could use {ask.client_name}? I&apos;ll mention you sent me.&rdquo;</p></div>
@@ -172,7 +192,7 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
               <span className={`r-tag r-${reason}`}><span className="d"></span>{REASON[reason!].label}</span>
               {queue.length > 1 && <Link href={skipHref} className="muted" style={{ fontSize: 13 }}>Skip</Link>}
             </div>
-            <div className="who" id="up-name">{lead.name} <span className="co">· {lead.client_name}</span></div>
+            <div className="who"><span id="up-name">{lead.name}</span> <span className="co">· {lead.client_name}</span></div>
             {facts.length > 0 && <div className="facts">{facts.map(([k, v], i) => <span key={i}>{k} <b>{v}</b></span>)}</div>}
             {lead.last_reply && lead.last_reply_kind === 'reply' && (
               <div className="opener" style={{ borderLeftColor: 'var(--bad)' }}><div className="q">They wrote</div><p>{lead.last_reply.split(/\n\s*On .+wrote:|\n>/)[0].trim().slice(0, 400)}</p></div>
@@ -226,22 +246,6 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
               })
             )}
             {queue.length > 8 && <div className="qrow"><span className="muted" style={{ fontSize: 13 }}>+{queue.length - 8} more</span></div>}
-            {!clientId && meetings.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>Meetings today</h3>
-                {meetings.map((m) => (
-                  <div className="qrow" key={m.id} style={{ flexWrap: 'wrap' }}>
-                    <span className="nm">{time(m.starts_at)} · {m.lead_name}</span>
-                    {new Date(m.starts_at) < new Date() && (
-                      <span className="actions" style={{ gap: 6, marginLeft: 'auto' }}>
-                        <form action={setMeetingStatus.bind(null, m.id, 'held', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0, fontSize: 12 }}>Held</button></form>
-                        <form action={setMeetingStatus.bind(null, m.id, 'no_show', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0, fontSize: 12 }}>No-show</button></form>
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
           </aside>
         </div>
       )}

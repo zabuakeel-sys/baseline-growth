@@ -8,6 +8,6 @@ export async function login(_prev: { error?: string; email?: string }, formData:
   const user = await verifyLogin(email, password);
   if (!user) return { error: 'That email and password do not match.', email };
   await startSession(user.id);
-  // Everyone lands on Home, the list of businesses (a rep sees only the ones they are on).
-  redirect('/');
+  // The owner lands on the Overview console; a salesperson lands on Today, their work queue.
+  redirect(user.role === 'owner' ? '/' : '/next');
 }

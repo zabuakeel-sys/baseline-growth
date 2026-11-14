@@ -31,7 +31,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   const ritaId = Number(psql("SELECT id FROM users WHERE email = 'rita@example.test'"));
 
   // LibraPro: 10% for 36 months from this month, a script, three prospects for Rita in two cities
-  await o.goto(base + '/');
+  await o.goto(base + '/clients');
   await o.click('.biz-card:has-text("LibraPro Facility Services")');
   await o.waitForURL(/\/clients\/\d+$/);
   const clientUrl = o.url().split('#')[0].split('?')[0];
@@ -66,7 +66,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   // Rep's day
   const r = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
   await login(r, 'rita@example.test', 'ritapassword1');
-  if (new URL(r.url()).pathname !== '/') fail(`rep should land on Home, got ${r.url()}`);
+  if (new URL(r.url()).pathname !== '/next') fail(`rep should land on Today, got ${r.url()}`);
   await r.goto(base + '/today');
   const fresh = await r.textContent('section[aria-labelledby=new-h]');
   if (!fresh.includes('Troy') || !fresh.includes('Detroit')) fail('call and visit list should be grouped by city');

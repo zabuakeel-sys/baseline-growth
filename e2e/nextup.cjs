@@ -17,9 +17,9 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await p.click('button[type=submit]');
   await p.waitForURL(base + '/');
 
-  // The menu is short
-  const nav = (await p.locator('header nav a').allTextContents()).join('|');
-  if (nav !== 'Home|Team|Money') fail(`menu should be Home, Team, Money; got ${nav}`);
+  // The sidebar nav (shown as a top bar at phone width)
+  const nav = (await p.locator('.mtop a').allTextContents()).map((s) => s.trim());
+  if (!nav.includes('Today') || !nav.includes('Overview') || !nav.includes('Businesses')) fail(`nav wrong: ${nav.join('|')}`);
 
   // LibraPro has its answers and a tested mailbox: Home asks to approve its first email
   const id = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
@@ -30,9 +30,9 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   psql(`INSERT INTO client_mailboxes (client_id, from_name, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, verified_at)
         VALUES (${id}, 'Zaino', 'sales@libra.example', 'other', 'smtp.libra.example', 465, true, 'imap.libra.example', 993, true, 'sales@libra.example', 'v1:x:x:x', now())`);
   await p.goto(base + '/');
-  const home = await p.textContent('.biz-list');
-  if (!home.includes('LibraPro Facility Services') || !home.includes('Review and approve the first email')) fail('Home should show LibraPro needing email approval');
-  if (!home.includes('AutoAt') || !home.includes('Finish the owner\'s answers')) fail('Home should show AutoAt at its first setup step');
+  const home = await p.textContent('main');
+  if (!home.includes('LibraPro Facility Services') || !home.includes('approve the first email')) fail('Overview should show LibraPro needing email approval');
+  if (!home.includes('AutoAt') || !home.includes("finish the owner's answers")) fail('Overview should show AutoAt at its first setup step');
   await p.screenshot({ path: S + '/31-home.png', fullPage: true });
 
   // Write and perfect the email on the Settings page, then start sending (two separate steps).
@@ -48,8 +48,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await p.waitForSelector('p.notice:has-text("Approved")');
   if (psql(`SELECT outreach_approved_at IS NOT NULL FROM clients WHERE id = ${id}`) !== 't') fail('approval not saved');
   await p.goto(base + '/');
-  if ((await p.textContent('.biz-list')).includes('Review and approve the first email')) fail('approved business should no longer ask for email approval');
-  if (!(await p.textContent('.biz-list')).includes('Live')) fail('Home should show LibraPro as live after approval');
+  if ((await p.textContent('main')).includes('LibraPro Facility Services — approve the first email')) fail('approved business should no longer ask for email approval');
+  if (!(await p.textContent('main')).includes('Emailing on its own')) fail('Overview should show LibraPro as live after approval');
   await p.goto(`${base}/clients/${id}`);
   if ((await p.textContent('main')).includes('Still setting up')) fail('approved business should show the live work screen, not setup');
   if (!(await p.locator('a:has-text("See the email")').count())) fail('live business page should show the running status');
@@ -66,11 +66,11 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   psql("UPDATE users SET goal_calls = 3 WHERE email = 'owner@example.test'");
   await p.goto(base + '/next');
-  if (!(await p.textContent('.goals')).includes('Calls: 0 of 3')) fail('goal should show on Next up');
+  if (!(await p.textContent('.strip')).includes('0 / 3 calls')) fail('calls goal should show on Today');
   const name = () => p.textContent('#up-name');
   if ((await name()) !== 'Una Reply') fail(`replies come first, got ${await name()}`);
-  if (!(await p.locator('.pill:has-text("They replied")').count())) fail('reason label missing');
-  if (!(await p.locator('a.button.big[href^="tel:"]').count())) fail('call button missing');
+  if (!(await p.locator('.r-tag:has-text("They replied")').count())) fail('reason label missing');
+  if (!(await p.locator('a.call[href^="tel:"]').count())) fail('call button missing');
   if (!(await p.textContent('.next-up')).includes('3 to go')) fail('should have 3 to go (later call not due)');
   await p.screenshot({ path: S + '/32-next-up-phone.png', fullPage: true });
   await p.click('button[value=talked]');
@@ -78,7 +78,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if ((await name()) !== 'Vic Due') fail(`due call should come next, got ${await name()}`);
   if (!(await p.textContent('.next-up')).includes('1 done today')) fail('done count should go up');
   // Skip moves Vic to the back
-  await p.click('text=Skip for now');
+  await p.click('text=Skip');
   await p.waitForFunction(() => document.querySelector('#up-name')?.textContent === 'Wes New');
   await p.fill('input[name=notes]', 'Rang twice');
   await p.click('button[value=no_answer]');
@@ -92,16 +92,16 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await p.waitForSelector('p.notice:has-text("booked")');
   if (psql("SELECT l.status || ' ' || (SELECT count(*) FROM meetings m WHERE m.lead_id = l.id) || ' ' || (SELECT outcome FROM activities a WHERE a.lead_id = l.id) FROM leads l WHERE l.name = 'Vic Due'") !== 'talking 1 meeting_booked') fail('meeting should be booked and logged');
   if (!(await p.locator('.meetings-today').count())) fail('today\'s meeting should show at the top');
-  if (!(await p.locator('text=You are done for now').count())) fail('queue should be empty');
-  const goalsNow = await p.textContent('.goals');
-  if (!goalsNow.includes('Calls: 3 of 3') || !goalsNow.includes('1 day')) fail(`goal met and streak expected, got ${goalsNow}`);
+  if (!(await p.locator('text=You are clear for today').count())) fail('queue should be empty');
+  const strip = await p.textContent('.strip');
+  if (!strip.includes('3 / 3 calls')) fail(`calls goal should be met, got ${strip}`);
   await p.screenshot({ path: S + '/33-next-up-done.png', fullPage: true });
 
   // A new customer: Next up asks for referrals, and the names become prospects
   psql(`INSERT INTO leads (client_id, name, phone, received_on, status, customer_since, closed_on, won_by)
         VALUES (${id}, 'Yara Won', '248-555-0199', ${D} - 20, 'won', ${D} - 2, ${D} - 2, (SELECT id FROM users WHERE email = 'owner@example.test'))`);
   await p.goto(base + '/next');
-  if ((await name()) !== 'Yara Won' || !(await p.locator('.pill:has-text("Ask for referrals")').count())) fail('referral ask should come up');
+  if ((await name()) !== 'Yara Won' || !(await p.locator('.r-tag:has-text("Ask for referrals")').count())) fail('referral ask should come up');
   await p.screenshot({ path: S + '/34-referral-ask.png', fullPage: true });
   await p.fill('input[name=name1]', 'Zed Friend');
   await p.fill('input[name=phone1]', '248-555-0177');
