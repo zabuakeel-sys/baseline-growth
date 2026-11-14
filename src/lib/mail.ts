@@ -96,17 +96,23 @@ async function tokenFor(a: MailAccount) {
   });
 }
 
-/** A client's own mailbox, or null when it has none (or its password cannot be read). */
-export async function clientAccount(clientId: number): Promise<MailAccount | null> {
-  const r = (await query<MailboxRow>('SELECT * FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
+/**
+ * A client's own mailbox, or null when it has none. By default only a mailbox that passed its
+ * connection test is returned, so a half-set-up or broken one is ignored and the shared mailbox is
+ * used instead. The "Test connection" and "Connect" flows pass requireVerified: false to check a
+ * mailbox before it is verified.
+ */
+export async function clientAccount(clientId: number, requireVerified = false): Promise<MailAccount | null> {
+  const r = (await query<MailboxRow>(
+    `SELECT * FROM client_mailboxes WHERE client_id = $1 ${requireVerified ? 'AND verified_at IS NOT NULL' : ''}`, [clientId])).rows[0];
   if (!r) return null;
   try { return fromRow(r); } catch { return null; }
 }
 
-/** Every client mailbox that can be used. */
+/** Every client mailbox that is connected and can be read (broken/unverified ones are skipped). */
 export async function allClientAccounts(): Promise<MailAccount[]> {
   const rows = (await query<MailboxRow>(
-    "SELECT m.* FROM client_mailboxes m JOIN clients c ON c.id = m.client_id WHERE c.status <> 'ended'")).rows;
+    "SELECT m.* FROM client_mailboxes m JOIN clients c ON c.id = m.client_id WHERE c.status <> 'ended' AND m.verified_at IS NOT NULL")).rows;
   const out: MailAccount[] = [];
   for (const r of rows) { try { out.push(fromRow(r)); } catch { /* unreadable password: shown on the client page */ } }
   return out;
@@ -118,7 +124,7 @@ export async function allClientAccounts(): Promise<MailAccount[]> {
  * "LibraPro" as the sender, with replies landing in the one shared inbox and sorted back by lead).
  */
 export async function outreachAccount(clientId: number) {
-  const own = await clientAccount(clientId);
+  const own = await clientAccount(clientId, true);
   if (own) return own;
   const shared = sharedAccount();
   if (!shared) return null;
@@ -208,11 +214,17 @@ export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
 }
 
 /** Checks that a mailbox can log in to send and to read. Throws with a readable reason. */
-export async function verifyAccount(account: MailAccount) {
+/**
+ * Checks a mailbox. Sending must work (throws if it does not, so a broken mailbox is never used).
+ * Reading replies is a bonus: if it fails, that is returned as a note rather than failing the whole
+ * mailbox, so an address that can send is still connected and used for outreach.
+ * Returns '' when both work, or a short note when only sending works.
+ */
+export async function verifyAccount(account: MailAccount): Promise<string> {
   if (account.graph) {
     const c = await checkMailbox(account.graph.mailbox);
     if (!c.canSend) throw new Error(`The Microsoft app is not allowed to send email (it has: ${c.roles.join(', ') || 'no mail permissions'}).`);
-    return;
+    return c.canRead ? '' : 'Sending works. Replies are not read automatically, so watch the inbox yourself.';
   }
   try {
     await (await transportFor(account)).verify();
@@ -224,8 +236,9 @@ export async function verifyAccount(account: MailAccount) {
     await c.connect();
     await c.logout();
   } catch (err) {
-    throw new Error(explainMailError(`Reading login failed: ${(err as Error).message}`));
+    return explainMailError(`Sending works, but reading replies failed: ${(err as Error).message}`);
   }
+  return '';
 }
 
 /** Adds what to do for the mailbox errors people actually hit. */

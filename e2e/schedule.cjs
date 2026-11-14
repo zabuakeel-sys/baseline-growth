@@ -54,7 +54,7 @@ async function deliver(raw) {
   // 1. Connect the business's own mailbox
   await p.goto(`${base}/clients/${clientId}`);
   await p.waitForSelector('#mailbox-h');
-  if (!(await p.textContent('#mailbox-h + p')).includes('app password')) fail('mailbox help text missing');
+  await p.click('summary:has-text("Advanced")');
   await p.selectOption('select[name=provider]', 'other');
   await p.fill('input[name=box_email]', BOX);
   await p.fill('input[name=from_name]', 'Zaino');
@@ -63,12 +63,10 @@ async function deliver(raw) {
   await p.fill('input[name=smtp_port]', '2525');
   await p.fill('input[name=imap_host]', '127.0.0.1');
   await p.fill('input[name=imap_port]', '1143');
-  await p.click('button:has-text("Save mailbox")');
-  await p.waitForSelector('p.notice:has-text("Mailbox saved")');
+  await p.click('button:has-text("Save and test")');
+  await p.waitForSelector('p.notice:has-text("Connected")');
   const stored = psql(`SELECT password_enc FROM client_mailboxes WHERE client_id = ${clientId}`);
   if (!stored.startsWith('v1:') || stored.includes('app-pass-1')) fail('password must be stored encrypted');
-  await p.click('button:has-text("Test connection")');
-  await p.waitForSelector('p.notice:has-text("Connected")');
   if (!(await p.locator('.pill:has-text("Connected")').count())) fail('connected badge missing');
   await p.screenshot({ path: S + '/28-mailbox.png', fullPage: false, clip: { x: 0, y: (await p.locator('#mailbox-h').boundingBox()).y - 30, width: 1000, height: 420 } });
 

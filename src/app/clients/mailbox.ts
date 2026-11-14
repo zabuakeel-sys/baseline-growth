@@ -53,7 +53,8 @@ export async function saveMailbox(clientId: number, formData: FormData): Promise
        auth = CASE WHEN $13 THEN 'password' ELSE client_mailboxes.auth END,
        refresh_token_enc = CASE WHEN $13 THEN '' ELSE client_mailboxes.refresh_token_enc END`,
     [clientId, fromName, email, provider, smtpHost, smtpPort, smtpSecure, imapHost, imapPort, imapSecure, passwordEnc, limit, Boolean(password)]);
-  return back(clientId, 'Mailbox saved. Press "Test connection" to check it');
+  // Test it right away so the owner does not need a second step.
+  return testMailbox(clientId);
 }
 
 /** Logs in to send and to read, and records the result. */
@@ -61,14 +62,15 @@ export async function testMailbox(clientId: number): Promise<Result> {
   await requireOwner();
   const account = await clientAccount(clientId);
   if (!account) return { error: 'No mailbox saved yet, or its password cannot be read (was APP_SECRET changed?). Save it again.' };
+  let note = '';
   try {
-    await verifyAccount(account);
+    note = await verifyAccount(account);
   } catch (err) {
     await query('UPDATE client_mailboxes SET verified_at = NULL, last_error = $2 WHERE client_id = $1', [clientId, (err as Error).message.slice(0, 500)]);
     return { error: (err as Error).message };
   }
-  await query("UPDATE client_mailboxes SET verified_at = now(), last_error = '' WHERE client_id = $1", [clientId]);
-  return back(clientId, 'Connected: the system can send and read this mailbox');
+  await query('UPDATE client_mailboxes SET verified_at = now(), last_error = $2 WHERE client_id = $1', [clientId, note]);
+  return back(clientId, note ? `Connected for sending. ${note}` : 'Connected: the system can send and read this mailbox');
 }
 
 export async function removeMailbox(clientId: number): Promise<Result> {

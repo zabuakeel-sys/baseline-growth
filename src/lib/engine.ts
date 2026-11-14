@@ -337,7 +337,7 @@ export async function handOver(leadId: number, userName: string) {
   }>(`SELECT l.name, l.email, l.phone, l.notes, l.need, l.status, c.id AS client_id, c.name AS client_name, c.contact_name, c.contact_email
       FROM leads l JOIN clients c ON c.id = l.client_id WHERE l.id = $1`, [leadId])).rows[0];
   if (!l) throw new Error('That prospect no longer exists.');
-  const account = sharedAccount() ?? await clientAccount(l.client_id);
+  const account = sharedAccount() ?? await clientAccount(l.client_id, true);
   if (!account) throw new Error('No mailbox is connected, so the introduction cannot be emailed.');
   if (!['talking', 'new', 'following_up', 'introduced'].includes(l.status)) throw new Error('Only open prospects can be handed over.');
   if (!l.contact_email) throw new Error(`Add a contact email for ${l.client_name} on its client page first.`);

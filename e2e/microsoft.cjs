@@ -23,7 +23,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   const id = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
 
   await p.goto(`${base}/clients/${id}`);
-  await p.click('a:has-text("signing in with Microsoft")');
+  await p.click('summary:has-text("Advanced")');
+  await p.click('a:has-text("sign in with Microsoft")');
   await p.waitForSelector('p.notice');
   const notice = await p.textContent('p.notice');
   console.log('after sign-in:', notice);

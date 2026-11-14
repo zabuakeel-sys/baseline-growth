@@ -26,9 +26,10 @@ const sent = () => JSON.parse(fs.readFileSync('/var/tmp/graph-sent.json', 'utf8'
   const before = sent().length;
   const connect = async (email) => {
     await p.goto(`${base}/clients/${id}`);
+    await p.click('summary:has-text("Advanced")');
     await p.fill('input[name=ms_email]', email);
     await p.fill('input[name=ms_from_name]', 'Zain Akeel');
-    await p.click('button:has-text("Connect through Microsoft app")');
+    await p.click('button:has-text("Connect")');
   };
 
   // The app is not allowed to send: says exactly what is missing

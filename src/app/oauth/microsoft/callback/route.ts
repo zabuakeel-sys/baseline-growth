@@ -51,12 +51,12 @@ export async function GET(request: Request) {
   const account = await clientAccount(clientId);
   try {
     if (!account) throw new Error('Saved, but the connection could not be read back.');
-    await verifyAccount(account);
-    await query("UPDATE client_mailboxes SET verified_at = now(), last_error = '' WHERE client_id = $1", [clientId]);
-    return go(`Connected ${who.email}: the system can send and read this mailbox`);
+    const note = await verifyAccount(account);
+    await query('UPDATE client_mailboxes SET verified_at = now(), last_error = $2 WHERE client_id = $1', [clientId, note]);
+    return go(note ? `Connected ${who.email} for sending. ${note}` : `Connected ${who.email}: the system can send and read this mailbox`);
   } catch (err) {
     const msg = (err as Error).message.slice(0, 500);
-    await query('UPDATE client_mailboxes SET last_error = $2 WHERE client_id = $1', [clientId, msg]);
-    return go(`Signed in as ${who.email}, but the test failed. See the Mailbox section`);
+    await query('UPDATE client_mailboxes SET verified_at = NULL, last_error = $2 WHERE client_id = $1', [clientId, msg]);
+    return go(`Signed in as ${who.email}, but it cannot send. See the Mailbox section`);
   }
 }
