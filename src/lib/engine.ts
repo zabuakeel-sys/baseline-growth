@@ -76,16 +76,10 @@ async function queueDue(settings: Settings) {
         // The owner's perfected first email wins; otherwise AI writes one; otherwise the template.
         if (l.touches_sent === 0 && l.outreach_subject.trim() && l.outreach_body.trim()) {
           const ctx = { name: l.name, city: cityOf(l.address), clientName: l.client_name, claimUrl: l.claim_url, address: l.mailing_address };
-          // The owner's subject is kept as written; the body is their email rewritten for this shop
-          // (right name and city, same message), so no two prospects get the identical email. The
-          // owner's own sign-off stays; only the legal opt-out + address are guaranteed.
+          // The owner's exact email: only the name, city and link change per shop. No AI rewriting.
+          // The owner's own sign-off stays; only the legal opt-out + address are guaranteed.
           subject = fillEmail(l.outreach_subject, ctx).replace(/\n+/g, ' ').trim();
-          const guide = fillEmail(l.outreach_body, ctx).replace(/\n+[^\n]*(unsubscribe|no thanks|rather not hear)[\s\S]*$/i, '').trim();
-          const written = await writeOutreachEmail({
-            leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,
-            clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step, claimUrl: l.claim_url, goal: l.goal, touch: 0, template: guide,
-          });
-          body = ensureFooter(written ? written.body : fillEmail(l.outreach_body, ctx), { address: l.mailing_address });
+          body = ensureFooter(fillEmail(l.outreach_body, ctx), { address: l.mailing_address });
         } else {
           const written = await writeOutreachEmail({
             leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,
