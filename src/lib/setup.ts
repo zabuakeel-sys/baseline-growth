@@ -11,11 +11,13 @@ export async function setupSteps(c: Client): Promise<SetupStep[]> {
   const a = (c.onboarding ?? {}) as Record<string, unknown>;
   const answersDone = Boolean(c.onboarding) && missingAnswers((k) => a[k]).length === 0;
   const box = (await query<{ verified: boolean }>('SELECT verified_at IS NOT NULL AS verified FROM client_mailboxes WHERE client_id = $1', [c.id])).rows[0];
-  const mailboxDone = Boolean(box?.verified) || (!box && Boolean(sharedAccount()));
+  // Done when a tested mailbox of its own exists, or the shared Baseline Growth mailbox is set up.
+  // A half-set-up/broken mailbox is ignored, since outreach falls back to the shared mailbox.
+  const mailboxDone = Boolean(box?.verified) || Boolean(sharedAccount());
   const live = (await query<{ n: number }>("SELECT count(*)::int AS n FROM outbox WHERE client_id = $1 AND status = 'sent'", [c.id])).rows[0].n > 0;
   return [
     { key: 'answers', label: 'Answers', done: answersDone, href: `/clients/${c.id}/setup`, action: 'Finish the owner\'s answers' },
-    { key: 'mailbox', label: 'Mailbox', done: mailboxDone, href: `/clients/${c.id}#mailbox-h`, action: box ? 'Test the mailbox connection' : 'Connect their outreach mailbox' },
+    { key: 'mailbox', label: 'Mailbox', done: mailboxDone, href: `/clients/${c.id}#mailbox-h`, action: 'Add the shared Baseline Growth mailbox, or connect one for this business' },
     { key: 'approve', label: 'Approve first email', done: Boolean(c.outreach_approved_at), href: `/clients/${c.id}#approve-h`, action: c.mailing_address ? 'Read and approve their first email' : 'Add a mailing address, then approve their first email' },
     { key: 'live', label: 'Live', done: live && Boolean(c.outreach_approved_at), href: `/clients/${c.id}`, action: 'Waiting for the first email to go out' },
   ];
