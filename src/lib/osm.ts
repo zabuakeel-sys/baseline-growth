@@ -15,12 +15,12 @@ export { splitQuery };
 const USER_AGENT = 'BaselineGrowthLeadEngine/1.0';
 
 // Public Overpass instances, tried in turn: the free servers are often briefly busy (502/504/429),
-// so a failover to the next mirror turns a transient outage into a successful search.
+// so a failover to the next mirror turns a transient outage into a successful search. These must all
+// carry the WHOLE planet, not a regional extract (a Switzerland-only mirror returns 0 for New York).
 const OVERPASS_MIRRORS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.osm.ch/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
 ];
 
 type Geo = { bbox: string; boundingbox: [string, string, string, string] };
@@ -93,6 +93,7 @@ async function overpassQuery(body: string): Promise<OverpassData> {
   // A single override (tests) replaces the mirror list.
   const mirrors = process.env.OSM_OVERPASS_URL ? [process.env.OSM_OVERPASS_URL] : OVERPASS_MIRRORS;
   let lastError = 'OpenStreetMap is busy right now. Will retry shortly.';
+  let emptyResult: OverpassData | null = null; // a clean but empty answer, trusted only if every mirror agrees
   for (const url of mirrors) {
     let res: Response;
     try {
@@ -115,7 +116,11 @@ async function overpassQuery(body: string): Promise<OverpassData> {
       lastError = 'OpenStreetMap could not finish the search in time (the free service was busy). Will retry shortly.';
       continue;
     }
-    return data;
+    // Real results: done. An empty answer could be a stale or regional mirror, so keep it aside and
+    // try the others; only return empty if no mirror has data.
+    if (data.elements && data.elements.length > 0) return data;
+    emptyResult = data;
   }
+  if (emptyResult) return emptyResult;
   throw new Error(lastError);
 }
