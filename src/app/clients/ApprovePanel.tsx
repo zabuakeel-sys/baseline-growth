@@ -1,32 +1,58 @@
 import type { Client } from '@/lib/clients';
-import { sampleFirstEmail } from '@/lib/setup';
-import { approveOutreach, pauseOutreach } from './outreach';
+import { starterEmail } from '@/lib/setup';
+import { approveOutreach, pauseOutreach, resetOutreachEmail, saveOutreachEmail } from './outreach';
 import ActionForm from '../ActionForm';
 
-/** Read the first email once; approving it turns on sending for this business. */
+/**
+ * Write and perfect the first email, then (separately) start sending. Nothing goes out until the
+ * owner is happy and explicitly turns sending on.
+ */
 export default async function ApprovePanel({ client, back }: { client: Client; back: string }) {
-  const email = await sampleFirstEmail(client);
-  if (client.outreach_approved_at) {
-    return (
-      <div className="actions">
-        <span className="pill signed">Sending on its own</span>
-        <ActionForm action={pauseOutreach.bind(null, client.id, back)}><button type="submit" className="secondary small">Pause and approve each email</button></ActionForm>
-      </div>
-    );
-  }
+  const draft = await starterEmail(client);
+  const live = Boolean(client.outreach_approved_at);
+  const ready = Boolean(client.outreach_subject.trim() && client.outreach_body.trim());
+
   return (
     <div>
-      <p className="muted" style={{ margin: '0 0 6px' }}>
-        {email.real ? `The first email queued (to ${email.lead_name}).` : 'A sample of the first email.'} Every prospect gets this, with their name,
-        and with a personal first line when the AI finds something specific. Follow-ups are shorter. Change the wording by editing the offer in the answers.
+      <p className="muted" style={{ marginTop: 0 }}>
+        This is the first email every prospect gets. Edit it until it is exactly right. Write <code>{'{first_name}'}</code> where
+        their name should go, and it is filled in for each shop. The signature and the legal opt-out line are added automatically, so
+        you do not need them here. Follow-ups are shorter and go out on their own schedule.
+        {draft.source === 'ai' && ' This starting draft was written by AI from your answers and goal; make it yours.'}
       </p>
-      <div className="lead-next">
-        <div className="task-meta">Subject: {email.subject}</div>
-        <pre className="message">{email.body}</pre>
-      </div>
-      <div className="actions" style={{ marginTop: 10 }}>
-        <ActionForm action={approveOutreach.bind(null, client.id, back)}><button type="submit">Looks good, start sending</button></ActionForm>
-      </div>
+
+      <ActionForm action={saveOutreachEmail.bind(null, client.id, back)}>
+        <label>Subject<input name="subject" defaultValue={draft.subject} /></label>
+        <label>Email<textarea name="body" defaultValue={draft.body} rows={12} style={{ fontFamily: 'inherit' }} /></label>
+        <div className="actions">
+          <button type="submit">Save email</button>
+          {draft.source === 'saved' && (
+            <ActionForm action={resetOutreachEmail.bind(null, client.id, back)}>
+              <button type="submit" className="secondary small">Start over from an auto-written draft</button>
+            </ActionForm>
+          )}
+        </div>
+      </ActionForm>
+
+      <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '16px 0' }} />
+
+      {live ? (
+        <div className="actions">
+          <span className="pill signed">Sending is on</span>
+          <ActionForm action={pauseOutreach.bind(null, client.id, back)}><button type="submit" className="secondary small">Pause sending</button></ActionForm>
+        </div>
+      ) : (
+        <div>
+          <p className="muted" style={{ margin: '0 0 8px' }}>
+            {ready
+              ? 'When this email is exactly how you want it, start sending. It goes to prospects on their schedule, and you can pause any time.'
+              : 'Save the email above first. Then you can start sending.'}
+          </p>
+          <ActionForm action={approveOutreach.bind(null, client.id, back)}>
+            <button type="submit" disabled={!ready}>Start sending to prospects</button>
+          </ActionForm>
+        </div>
+      )}
     </div>
   );
 }

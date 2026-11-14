@@ -31,16 +31,26 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
         VALUES (${id}, 'Zaino', 'sales@libra.example', 'other', 'smtp.libra.example', 465, true, 'imap.libra.example', 993, true, 'sales@libra.example', 'v1:x:x:x', now())`);
   await p.goto(base + '/');
   const todo = await p.textContent('section[aria-labelledby=todo-h]');
-  if (!todo.includes('LibraPro Facility Services: approve the first email')) fail('Home should ask to approve LibraPro\'s first email');
-  if (!todo.includes('LibraPro cleans offices and medical buildings across Metro Detroit.')) fail('the email to approve should be shown');
+  if (!todo.includes('LibraPro Facility Services: write and approve the first email')) fail('Home should ask to write/approve LibraPro email');
   if (!todo.includes('AutoAt: finish the owner\'s answers')) fail('AutoAt should be at its first setup step');
   await p.screenshot({ path: S + '/31-home.png', fullPage: true });
-  await p.click('button:has-text("Looks good, start sending")');
+
+  // Write and perfect the email on the business page, then start sending (two separate steps).
+  await p.goto(`${base}/clients/${id}#approve-h`);
+  await p.waitForSelector('#approve-h');
+  if (!(await p.inputValue('textarea[name=body]')).includes('{first_name}')) fail('starter email should use the {first_name} placeholder');
+  await p.fill('input[name=subject]', 'Claim your free listing');
+  await p.fill('textarea[name=body]', 'Hi {first_name},\n\nQuick note about LibraPro for your shop. Want in?');
+  await p.click('button:has-text("Save email")');
+  await p.waitForSelector('p.notice:has-text("Email saved")');
+  if (psql(`SELECT outreach_subject FROM clients WHERE id = ${id}`) !== 'Claim your free listing') fail('custom email not saved');
+  await p.click('button:has-text("Start sending to prospects")');
   await p.waitForSelector('p.notice:has-text("Approved")');
   if (psql(`SELECT outreach_approved_at IS NOT NULL FROM clients WHERE id = ${id}`) !== 't') fail('approval not saved');
-  if ((await p.textContent('section[aria-labelledby=todo-h]')).includes('approve the first email')) fail('approved business should leave the list');
+  await p.goto(base + '/');
+  if ((await p.textContent('section[aria-labelledby=todo-h]')).includes('write and approve the first email')) fail('approved business should leave the list');
   await p.goto(`${base}/clients/${id}`);
-  if (!(await p.locator('.steps li.done').count()) || !(await p.locator('text=Sending on its own').count())) fail('business page should show setup steps and sending on');
+  if (!(await p.locator('.steps li.done').count()) || !(await p.locator('text=Sending is on').count())) fail('business page should show setup steps and sending on');
   await p.goto(base + '/clients');
   if (!(await p.textContent('table')).includes('Starting')) fail('Businesses should show LibraPro as starting');
 

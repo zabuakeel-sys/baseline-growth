@@ -24,6 +24,29 @@ export async function setupSteps(c: Client): Promise<SetupStep[]> {
   ];
 }
 
+const TOKEN = 'XFIRSTNAMEX';
+
+/**
+ * The editable starting draft of the first email (subject + body), with {first_name} where the
+ * prospect's name goes. The owner's saved email if there is one, else an AI draft, else a template.
+ * No signature/opt-out here; those are added automatically when sending.
+ */
+export async function starterEmail(c: Client): Promise<{ subject: string; body: string; source: 'saved' | 'ai' | 'template' }> {
+  if (c.outreach_subject.trim() && c.outreach_body.trim()) {
+    return { subject: c.outreach_subject, body: c.outreach_body, source: 'saved' };
+  }
+  const written = await writeOutreachEmail({
+    leadName: TOKEN, about: '', need: '', city: '', rating: null, reviews: null,
+    clientName: c.name, offer: c.offer, whyUs: c.why_us, firstStep: c.first_step, claimUrl: c.claim_url, goal: c.goal, touch: 0,
+  });
+  const token = new RegExp(TOKEN, 'gi');
+  if (written) return { subject: written.subject.replace(token, '{first_name}'), body: written.body.replace(token, '{first_name}'), source: 'ai' };
+  // No AI: a plain editable starter built from the answers, with the placeholder.
+  const step = c.first_step ? ` The first step is ${c.first_step.replace(/[.\s]+$/, '')}${c.claim_url ? `: ${c.claim_url}` : ''}.` : '';
+  const body = `Hi {first_name},\n\n${c.offer || `We work with ${c.name}.`}${step}\n\nWould this be worth a quick look?`;
+  return { subject: `Quick question from ${c.name}`, body, source: 'template' };
+}
+
 /** The email to approve: the first one actually queued for this business, or an AI-written sample. */
 export async function sampleFirstEmail(c: Client) {
   const queued = (await query<{ subject: string; body: string; lead_name: string }>(
@@ -37,9 +60,9 @@ export async function sampleFirstEmail(c: Client) {
     clientName: c.name, offer: c.offer, whyUs: c.why_us, firstStep: c.first_step, claimUrl: c.claim_url, goal: c.goal, touch: 0,
   });
   return {
-    subject: `Quick question from ${c.name}`, lead_name: 'Pat Example', real: false,
+    subject: written ? written.subject : `Quick question from ${c.name}`, lead_name: 'Pat Example', real: false,
     body: written
-      ? written + signOff({ clientName: c.name, senderName: sender, address: c.mailing_address })
+      ? written.body + signOff({ clientName: c.name, senderName: sender, address: c.mailing_address })
       : messageFor(0, { leadName: 'Pat Example', clientName: c.name, offer: c.offer, senderName: sender, address: c.mailing_address }),
   };
 }

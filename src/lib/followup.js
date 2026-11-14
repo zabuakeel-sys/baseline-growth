@@ -115,3 +115,18 @@ export function leadStats(leads) {
     customerRate: reached.length ? Math.round((customers.length / reached.length) * 100) : null,
   };
 }
+
+/**
+ * Fills the owner's perfected email template for one prospect. Replaces {first_name}, {name} and
+ * {business}; adds a greeting if the owner didn't write one. Used for the first email when the
+ * owner has written a custom one.
+ */
+export function fillEmail(text, { firstName = '', name = '', clientName = '' } = {}) {
+  const first = firstName || greetingName(name) || 'there';
+  let out = String(text || '')
+    .replace(/\{\s*first[_ ]?name\s*\}/gi, first)
+    .replace(/\{\s*name\s*\}/gi, name || first)
+    .replace(/\{\s*(business|client|company|shop)\s*\}/gi, clientName || '');
+  if (!/^\s*(hi|hey|hello|dear)\b/i.test(out)) out = `Hi ${first},\n\n${out.trim()}`;
+  return out.trim();
+}

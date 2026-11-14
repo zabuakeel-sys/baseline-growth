@@ -5,7 +5,7 @@
 // Each prospect follows the mixed schedule in cadence.js: emails are queued here and sent from the
 // client's own mailbox (or the shared one); calls and visits go on the assigned rep's Today list.
 import { pool, query } from './db';
-import { messageFor, signOff } from './followup';
+import { fillEmail, messageFor, signOff } from './followup';
 import { CADENCE, currentStep, emailNumber, isMissed, isScheduleLabel, stepLabel } from './cadence';
 import { toHtml } from './emailhtml';
 import { addressOf, classifyReply, inSendWindow, remainingToday } from './mailrules';
@@ -31,7 +31,7 @@ type DueLead = {
   id: number; email: string; phone: string; address: string; name: string; need: string; notes: string; rating: number | null; reviews: number | null;
   received_on: string; touches_sent: number; status: string; cadence_step: number; next_action_on: string | null; next_action: string;
   client_id: number; client_name: string; offer: string; mailing_address: string; visits: boolean; approved: boolean;
-  goal: string; why_us: string; first_step: string; claim_url: string;
+  goal: string; outreach_subject: string; outreach_body: string; why_us: string; first_step: string; claim_url: string;
 };
 
 /**
@@ -41,7 +41,7 @@ type DueLead = {
 async function queueDue(settings: Settings) {
   const leads = (await query<DueLead>(
     `SELECT l.id, l.email, l.phone, l.address, l.name, l.need, l.notes, l.rating, l.reviews, l.received_on, l.touches_sent, l.status,
-        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits, c.goal, c.why_us, c.first_step, c.claim_url,
+        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits, c.goal, c.outreach_subject, c.outreach_body, c.why_us, c.first_step, c.claim_url,
         c.outreach_approved_at IS NOT NULL AS approved
       FROM leads l JOIN clients c ON c.id = l.client_id
       WHERE l.status IN ('new', 'following_up') AND l.cadence_step < $1 AND c.status <> 'ended'`, [CADENCE.length])).rows;
@@ -67,22 +67,34 @@ async function queueDue(settings: Settings) {
         const exists = await query('SELECT 1 FROM outbox WHERE lead_id = $1 AND touch = $2', [l.id, l.touches_sent]);
         if (exists.rowCount) break;
         const first = l.touches_sent > 0
-          ? (await query<{ message_id: string }>("SELECT message_id FROM outbox WHERE lead_id = $1 AND touch = 0 AND status = 'sent'", [l.id])).rows[0]
+          ? (await query<{ message_id: string; subject: string }>("SELECT message_id, subject FROM outbox WHERE lead_id = $1 AND touch = 0 AND status = 'sent'", [l.id])).rows[0]
           : undefined;
         const senderName = account.senderName ?? nameOf(account.from);
-        // A real, human email written per prospect when AI is on; the fixed template otherwise.
-        const written = await writeOutreachEmail({
-          leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,
-          clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step, claimUrl: l.claim_url, goal: l.goal, touch: l.touches_sent,
-        });
-        const body = written
-          ? written + signOff({ clientName: l.client_name, senderName, address: l.mailing_address })
-          : messageFor(l.touches_sent, { leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName, address: l.mailing_address });
+        const sign = signOff({ clientName: l.client_name, senderName, address: l.mailing_address });
+        let subject: string;
+        let body: string;
+        // The owner's perfected first email wins; otherwise AI writes one; otherwise the template.
+        if (l.touches_sent === 0 && l.outreach_subject.trim() && l.outreach_body.trim()) {
+          subject = fillEmail(l.outreach_subject, { name: l.name, clientName: l.client_name }).replace(/\n+/g, ' ').trim();
+          body = fillEmail(l.outreach_body, { name: l.name, clientName: l.client_name }) + sign;
+        } else {
+          const written = await writeOutreachEmail({
+            leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,
+            clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step, claimUrl: l.claim_url, goal: l.goal, touch: l.touches_sent,
+          });
+          body = written ? written.body + sign
+            : messageFor(l.touches_sent, { leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName, address: l.mailing_address });
+          subject = written
+            ? (l.touches_sent === 0 ? written.subject : `Re: ${first?.subject?.replace(/^Re:\s*/i, '') ?? written.subject}`)
+            : subjectFor(l.client_name, l.touches_sent);
+        }
+        // Follow-ups to a custom first email keep its subject as a reply.
+        if (l.touches_sent > 0 && first?.subject) subject = `Re: ${first.subject.replace(/^Re:\s*/i, '')}`;
         const r = await query(
           `INSERT INTO outbox (lead_id, client_id, kind, step, touch, to_email, subject, body, status, in_reply_to, approved_at)
            VALUES ($1, $2, 'sequence', $3, $4, $5, $6, $7, $8, $9, CASE WHEN $8 = 'approved' THEN now() END)
            ON CONFLICT (lead_id, touch) DO NOTHING`,
-          [l.id, l.client_id, step.index, l.touches_sent, l.email, subjectFor(l.client_name, l.touches_sent), body,
+          [l.id, l.client_id, step.index, l.touches_sent, l.email, subject, body,
             settings.auto_send || l.approved ? 'approved' : 'pending', first?.message_id ?? null]);
         queued += r.rowCount ?? 0;
         break;

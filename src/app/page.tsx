@@ -9,7 +9,6 @@ import { leadsForDay } from '@/lib/leads';
 import { nextQueue } from '@/lib/queue';
 import { setupSteps } from '@/lib/setup';
 import { today } from '@/lib/work';
-import ApprovePanel from './clients/ApprovePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +53,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     const next = steps.find((s) => !s.done && s.key !== 'live');
     if (!next) continue;
     if (next.key === 'approve') {
-      todos.push({ key: `a${c.id}`, what: <><strong>{c.name}</strong>: approve the first email</>, detail: 'Once approved, its outreach sends on its own.', body: <ApprovePanel client={c} back="/" /> });
+      todos.push({ key: `a${c.id}`, what: <><strong>{c.name}</strong>: write and approve the first email</>, detail: 'Perfect the wording, then start sending.', href: `/clients/${c.id}#approve-h`, button: 'Open email' });
     } else {
       todos.push({ key: `s${c.id}`, what: <><strong>{c.name}</strong>: {next.action.toLowerCase()}</>, detail: `Setup step ${steps.indexOf(next) + 1} of 3.`, href: next.href, button: 'Do it' });
     }

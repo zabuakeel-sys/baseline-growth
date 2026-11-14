@@ -56,3 +56,10 @@ test('pipeline numbers', () => {
   assert.deepEqual(s, { total: 5, reached: 4, replied: 3, introduced: 2, customers: 1, customerRate: 25 });
   assert.equal(leadStats([]).customerRate, null);
 });
+
+test('fillEmail replaces placeholders and adds a greeting if missing', async () => {
+  const { fillEmail } = await import('../src/lib/followup.js');
+  assert.equal(fillEmail('Hi {first_name}, claim {business} today.', { name: 'Pat Park', clientName: 'AutoAt' }), 'Hi Pat, claim AutoAt today.');
+  assert.equal(fillEmail('We can help.', { name: 'Dana Lee' }), 'Hi Dana,\n\nWe can help.');
+  assert.equal(fillEmail('Hello {name}.', { name: 'Sam' }), 'Hello Sam.');
+});

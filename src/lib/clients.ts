@@ -10,7 +10,7 @@ export type Client = {
   status: Status; monthly_fee_cents: number; bonus_percent: number;
   share_percent: number; share_months: number | null; signup_fee_cents: number; offer: string; mailing_address: string; visits: boolean; logo_url: string; outreach_approved_at: string | null; call_script: string;
   claim_url: string; claim_label: string; pricing: import('./playbook').Pricing | null;
-  onboarding: unknown; goal: string; why_us: string; first_step: string; customer_value_cents: number | null; autopilot: boolean; daily_prospects: number;
+  onboarding: unknown; goal: string; outreach_subject: string; outreach_body: string; why_us: string; first_step: string; customer_value_cents: number | null; autopilot: boolean; daily_prospects: number;
   contract_start: string | null; contract_end: string | null; minimum_months: number; notes: string;
 };
 

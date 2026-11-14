@@ -262,15 +262,16 @@ Hard rules:
 - Use ONLY the facts provided about the client and the prospect. Never invent features, prices, promises, numbers, guarantees, or claims.
 - If a specific true detail about this prospect is given, you may open with one natural sentence about it. If not, open plainly. Never pretend to know them.
 - The ask must match the client's "first step" exactly. If the first step is free or no-cost, say plainly that it is free / no cost. If a link is given, include it so they can act in one click.
-- Length 45 to 95 words. Start with "Hi <first name>,". Write the body only. Do NOT add a signature, sign-off, name, or opt-out line (those are added automatically).
+- Also write a short, specific SUBJECT line (3 to 7 words) that matches the goal and would make this prospect open it. No clickbait, no all-caps.
+- Length 45 to 95 words. The body starts with "Hi <first name>,". Write the body only in the body field. Do NOT add a signature, sign-off, name, or opt-out line (those are added automatically). Explain simply what to do and what happens after they do it (how their customers will reach them).
 - "touch" tells you which message this is. Touch 0 is the first contact: introduce briefly and make the ask. Touches 1+ are follow-ups to someone who has not replied: keep it very short, friendly, no guilt, restate the simple ask (and that it is free, if it is).`;
 
-const OutreachEmail = z.object({ body: z.string() });
+const OutreachEmail = z.object({ subject: z.string(), body: z.string() });
 
 export async function writeOutreachEmail(ctx: {
   leadName: string; about: string; need: string; city: string; rating: number | null; reviews: number | null;
   clientName: string; offer: string; whyUs: string; firstStep: string; claimUrl: string; goal: string; touch: number;
-}): Promise<string | null> {
+}): Promise<{ subject: string; body: string } | null> {
   if (!coachConfigured()) return null;
   try {
     const response = await getClient().messages.parse({
@@ -298,7 +299,8 @@ export async function writeOutreachEmail(ctx: {
     if (response.stop_reason === 'refusal' || !response.parsed_output?.body.trim()) return null;
     let body = response.parsed_output.body.trim();
     if (!/^Hi\b/i.test(body)) body = `Hi ${ctx.leadName.trim().split(/\s+/)[0] || 'there'},\n\n${body}`;
-    return body;
+    const subject = response.parsed_output.subject.trim().slice(0, 120) || `A quick note from ${ctx.clientName}`;
+    return { subject, body };
   } catch (err) {
     console.error('outreach email failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
     return null;
