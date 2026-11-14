@@ -58,7 +58,14 @@ async function searchNew(textQuery: string, maxResults: number, key: string): Pr
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new Error(`Google Places returned ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+      // Pull the useful bits out of a quota error so the cause is obvious: which project and limit.
+      let extra = '';
+      try {
+        const j = JSON.parse(detail) as { error?: { message?: string; details?: { metadata?: Record<string, string> }[] } };
+        const meta = j.error?.details?.map((d) => d.metadata).find((m) => m && (m.consumer || m.quota_limit_value));
+        if (meta) extra = ` [project ${meta.consumer ?? '?'}, daily limit ${meta.quota_limit_value ?? '?'}]`;
+      } catch { /* not JSON */ }
+      throw new Error(`Google Places returned ${res.status}${extra}${detail ? `: ${detail.replace(/\s+/g, ' ').slice(0, 160)}` : ''}`);
     }
     const data = (await res.json()) as { places?: ApiPlace[]; nextPageToken?: string };
     for (const p of data.places ?? []) {
