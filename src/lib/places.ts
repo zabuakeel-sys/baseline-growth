@@ -1,7 +1,8 @@
-// Google Places text search: "independent auto repair shop in Detroit, MI" -> businesses.
-// Needs GOOGLE_PLACES_API_KEY. Tries Places API (New) first; if the key is only enabled for the
-// older Places API (a common case for keys made for other apps), it falls back to that automatically,
-// so one key works either way. Each request is billed by Google; see their current pricing.
+// Business search: "independent auto repair shop in Detroit, MI" -> businesses.
+// Prefers Google Places when GOOGLE_PLACES_API_KEY is set: Places API (New) first, then the older
+// Places API if the key is only enabled for that one. If Google is not enabled or over its daily
+// quota on both, or there is no Google key at all, it falls back to OpenStreetMap, which is free and
+// needs no key or billing (see osm.ts). So search works even with no paid Google account.
 // PLACES_API_URL / PLACES_LEGACY_URL point at stand-in servers for tests.
 
 export type Place = {
@@ -19,7 +20,10 @@ const FIELDS = [
   'places.websiteUri', 'places.rating', 'places.userRatingCount', 'places.businessStatus', 'nextPageToken',
 ].join(',');
 
-export const placesConfigured = () => Boolean(process.env.GOOGLE_PLACES_API_KEY);
+// Search is always available now: with no Google key it uses the free OpenStreetMap source.
+export const placesConfigured = () => true;
+/** True only when a Google Places key is set, so we try Google before the free source. */
+export const googleConfigured = () => Boolean(process.env.GOOGLE_PLACES_API_KEY);
 
 /** True when Google refused the key for this API (not enabled / not permitted), so the other API is worth a try. */
 const isNotEnabled = (err: unknown) => /\b403\b|PERMISSION_DENIED|REQUEST_DENIED|SERVICE_DISABLED|not been used|disabled/i.test((err as Error).message);
@@ -27,13 +31,14 @@ const isNotEnabled = (err: unknown) => /\b403\b|PERMISSION_DENIED|REQUEST_DENIED
 const isQuota = (err: unknown) => /\b429\b|RESOURCE_EXHAUSTED|Quota exceeded|OVER_QUERY_LIMIT|rateLimitExceeded/i.test((err as Error).message);
 
 /**
- * Search, preferring Places API (New). If the key is not enabled for it, or the new API is over its
- * daily quota (common when it is capped at ~100/day while the project's older Places API has the
- * real quota, which is what the Kacity apps use), fall back to the older Places API.
+ * Search, preferring Google Places (New), then the older Places API, then the free OpenStreetMap
+ * source. Google needs a key with billing; when it is not enabled or over its daily quota on both
+ * APIs, or there is no key at all, OpenStreetMap takes over so prospects still come in.
  */
 export async function searchPlaces(textQuery: string, maxResults: number): Promise<Place[]> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
-  if (!key) throw new Error('GOOGLE_PLACES_API_KEY is not set.');
+  // No Google key: go straight to the free source.
+  if (!key) return searchFree(textQuery, maxResults);
   try {
     return await searchNew(textQuery, maxResults, key);
   } catch (err) {
@@ -41,16 +46,17 @@ export async function searchPlaces(textQuery: string, maxResults: number): Promi
     try {
       return await searchLegacy(textQuery, maxResults, key);
     } catch (legacyErr) {
-      // Neither API worked: report clearly so the fix is obvious.
-      if (isNotEnabled(legacyErr)) {
-        throw new Error(`Google refused this key for the older Places API too. Set the key's API restrictions to "Don't restrict key" (or add "Places API"), so it can use the same Places API the Kacity apps use. (New API said: ${(err as Error).message.slice(0, 120)})`);
-      }
-      if (isQuota(legacyErr) && isQuota(err)) {
-        throw new Error('Both Places APIs are over quota on this Google project. Link a paid billing account to the project (the current one is limited to ~100 searches a day).');
-      }
+      // Google is blocked or over quota on both APIs: use OpenStreetMap instead of failing.
+      if (isNotEnabled(legacyErr) || isQuota(legacyErr)) return searchFree(textQuery, maxResults);
       throw legacyErr;
     }
   }
+}
+
+/** The free OpenStreetMap source (no key, no billing). */
+async function searchFree(textQuery: string, maxResults: number): Promise<Place[]> {
+  const { searchOSM } = await import('./osm');
+  return searchOSM(textQuery, maxResults);
 }
 
 /** Places API (New): POST text search, up to 60 results across 3 pages. */
