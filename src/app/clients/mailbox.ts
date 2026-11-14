@@ -41,7 +41,9 @@ export async function saveMailbox(clientId: number, formData: FormData): Promise
   const password = String(formData.get('password') ?? '');
   const existing = (await query<{ password_enc: string }>('SELECT password_enc FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
   if (!password && !existing) return { error: 'Add the app password.' };
-  const passwordEnc = password ? encrypt(provider === 'google' ? password.replace(/\s+/g, '') : password) : existing.password_enc;
+  // Google shows app passwords in groups ("abcd efgh ijkl mnop"); the spaces are not part of it.
+  const isGoogle = provider === 'google' || /gmail\.com$|google\.com$/i.test(smtpHost);
+  const passwordEnc = password ? encrypt(isGoogle ? password.replace(/\s+/g, '') : password) : existing.password_enc;
   await query(
     `INSERT INTO client_mailboxes (client_id, from_name, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, daily_limit)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $3, $11, $12)
