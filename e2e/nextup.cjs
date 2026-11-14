@@ -35,8 +35,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if (!home.includes('AutoAt') || !home.includes('Finish the owner\'s answers')) fail('Home should show AutoAt at its first setup step');
   await p.screenshot({ path: S + '/31-home.png', fullPage: true });
 
-  // Write and perfect the email on the business page, then start sending (two separate steps).
-  await p.goto(`${base}/clients/${id}#approve-h`);
+  // Write and perfect the email on the Settings page, then start sending (two separate steps).
+  await p.goto(`${base}/clients/${id}/settings#approve-h`);
   await p.waitForSelector('#approve-h');
   if (!/\[First name\]|{first_name}/.test(await p.inputValue('textarea[name=body]'))) fail('starter email should use a first-name placeholder');
   await p.fill('input[name=subject]', 'Claim your free listing');
@@ -51,7 +51,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if ((await p.textContent('.biz-list')).includes('Review and approve the first email')) fail('approved business should no longer ask for email approval');
   if (!(await p.textContent('.biz-list')).includes('Live')) fail('Home should show LibraPro as live after approval');
   await p.goto(`${base}/clients/${id}`);
-  if (!(await p.locator('#work-h').count()) || !(await p.locator('text=Sending is on').count())) fail('live business page should lead with the work panel and show sending on');
+  if ((await p.textContent('main')).includes('Still setting up')) fail('approved business should show the live work screen, not setup');
+  if (!(await p.locator('a:has-text("See the email")').count())) fail('live business page should show the running status');
 
   // Next up: a reply, a due call, a new prospect, a call not due yet
   const D = "(now() AT TIME ZONE 'America/Detroit')::date";

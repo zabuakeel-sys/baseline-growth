@@ -233,3 +233,6 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 
 /* Business page: "what needs doing" count pills */
 .work-counts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Business page header row */
+.biz-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
