@@ -23,7 +23,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   const id = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
 
   await p.goto(`${base}/clients/${id}`);
-  await p.click('a:has-text("Connect with Microsoft")');
+  await p.click('a:has-text("signing in with Microsoft")');
   await p.waitForSelector('p.notice');
   const notice = await p.textContent('p.notice');
   console.log('after sign-in:', notice);
@@ -35,14 +35,14 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if (!oauthLogin || oauthLogin.user !== 'zain@libra.example' || !/^access-r\d+$/.test(oauthLogin.accessToken)) fail(`sending should sign in with a token: ${JSON.stringify(auths)}`);
   // Sending worked; reading fails here only because the local IMAP server has no OAuth. The page explains it.
   const box = await p.textContent('section[aria-labelledby=mailbox-h]');
-  if (!box.includes('connected with Microsoft') || !box.includes('Reconnect with Microsoft')) fail('panel should show the Microsoft connection');
+  if (!box.includes('connected with Microsoft')) fail('panel should show the Microsoft connection');
   if (box.includes('Sending login failed')) fail('sending should have worked');
   await p.screenshot({ path: S + '/36-microsoft-connected.png', fullPage: false });
 
   // Declined consent comes back as a readable message
   psql(`UPDATE client_mailboxes SET email = 'deny@libra.example' WHERE client_id = ${id}`);
   await p.goto(`${base}/clients/${id}`);
-  await p.click('a:has-text("Reconnect with Microsoft")');
+  await p.goto(`${base}/oauth/microsoft/start?client=${id}&hint=deny@libra.example`);
   await p.waitForSelector('p.notice:has-text("Microsoft said no")');
   // A forged callback without the browser's state is refused
   await p.goto(`${base}/oauth/microsoft/callback?code=code-123&state=forged`);

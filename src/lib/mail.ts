@@ -13,6 +13,7 @@ import { simpleParser } from 'mailparser';
 import { query } from './db';
 import { decrypt, encrypt } from './secret';
 import { accessToken } from './msoauth';
+import { appAccess, checkMailbox, graphFetchUnread, graphSend } from './graph';
 
 export type MailAccount = {
   key: string; // cache key: 'shared' or 'client:<id>'
@@ -22,6 +23,7 @@ export type MailAccount = {
   imap: { host: string; port: number; secure: boolean; user: string; pass: string } | null;
   dailyLimit: number | null; // null = the shared outreach limit applies
   oauth?: { refreshToken: string }; // "Connect with Microsoft": sign in with a token, no password
+  graph?: { mailbox: string };      // Microsoft Graph with the app's own access: no sign-in at all
 };
 
 const env = (k: string) => process.env[k] ?? '';
@@ -55,10 +57,16 @@ export function sharedAccount(): MailAccount | null {
 type MailboxRow = {
   client_id: number; from_name: string; email: string; smtp_host: string; smtp_port: number; smtp_secure: boolean;
   imap_host: string; imap_port: number; imap_secure: boolean; username: string; password_enc: string; daily_limit: number;
-  auth: 'password' | 'oauth'; refresh_token_enc: string;
+  auth: 'password' | 'oauth' | 'graph'; refresh_token_enc: string;
 };
 
 function fromRow(r: MailboxRow): MailAccount {
+  if (r.auth === 'graph') {
+    return {
+      key: `client:${r.client_id}`, clientId: r.client_id, from: `${r.from_name.replace(/["<>]/g, '')} <${r.email}>`, dailyLimit: r.daily_limit,
+      smtp: { host: '', port: 0, secure: true, user: r.email, pass: '' }, imap: null, graph: { mailbox: r.email },
+    };
+  }
   const oauth = r.auth === 'oauth';
   const pass = oauth ? '' : decrypt(r.password_enc);
   return {
@@ -123,6 +131,7 @@ export async function sendMail(
   account: MailAccount | null = sharedAccount(),
 ) {
   if (!account) throw new Error('No mailbox is connected for sending.');
+  if (account.graph) return graphSend(account.graph.mailbox, m);
   const messageId = `<${randomUUID()}@${domainOf(account.from)}>`;
   await (await transportFor(account)).sendMail({
     from: account.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), messageId,
@@ -147,6 +156,10 @@ async function imapClient(a: MailAccount) {
 
 /** Reads every unread message in the account's inbox and marks it read. */
 export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
+  if (account.graph) {
+    const { roles } = await appAccess();
+    return roles.includes('Mail.Read') || roles.includes('Mail.ReadWrite') ? graphFetchUnread(account.graph.mailbox) : [];
+  }
   const client = await imapClient(account);
   await client.connect();
   const out: Incoming[] = [];
@@ -177,6 +190,11 @@ export async function fetchUnread(account: MailAccount): Promise<Incoming[]> {
 
 /** Checks that a mailbox can log in to send and to read. Throws with a readable reason. */
 export async function verifyAccount(account: MailAccount) {
+  if (account.graph) {
+    const c = await checkMailbox(account.graph.mailbox);
+    if (!c.canSend) throw new Error(`The Microsoft app is not allowed to send email (it has: ${c.roles.join(', ') || 'no mail permissions'}).`);
+    return;
+  }
   try {
     await (await transportFor(account)).verify();
   } catch (err) {

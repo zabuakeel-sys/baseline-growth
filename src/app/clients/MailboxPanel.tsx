@@ -2,7 +2,8 @@ import { query } from '@/lib/db';
 import { PROVIDERS } from '@/lib/mail';
 import { secretConfigured } from '@/lib/secret';
 import { microsoftConfigured } from '@/lib/msoauth';
-import { removeMailbox, saveMailbox, testMailbox } from './mailbox';
+import { connectMicrosoftApp, removeMailbox, saveMailbox, testMailbox } from './mailbox';
+import { graphConfigured } from '@/lib/graph';
 import ActionForm from '../ActionForm';
 
 type Box = { auth: string; from_name: string; email: string; provider: keyof typeof PROVIDERS; smtp_host: string; smtp_port: number; imap_host: string; imap_port: number; daily_limit: number; verified_at: string | null; last_error: string };
@@ -18,20 +19,24 @@ export default async function MailboxPanel({ clientId, clientName }: { clientId:
       <h2 id="mailbox-h">Mailbox</h2>
       <p className="muted" style={{ marginTop: 0 }}>
         The address {clientName} gave you for outreach. Emails for {clientName} go out from it and replies are read from it.
-        <strong>Microsoft 365 / Outlook:</strong> use the Connect with Microsoft button (no password).{' '}
+        <strong>Microsoft 365 / Outlook:</strong> connect through the Microsoft app below (no password).{' '}
         <strong>Google:</strong> use an app password from myaccount.google.com/apppasswords, never the normal password.
       </p>
-      <div className="actions" style={{ marginBottom: 12 }}>
-        {microsoftConfigured()
-          ? <a className="button secondary" href={`/oauth/microsoft/start?client=${clientId}${box?.provider === 'microsoft' ? `&hint=${encodeURIComponent(box.email)}` : ''}`}>
-              {box?.auth === 'oauth' ? 'Reconnect with Microsoft' : 'Connect with Microsoft'}
-            </a>
-          : <span className="muted" style={{ fontSize: 13 }}>Connect with Microsoft needs MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET and MICROSOFT_TENANT_ID in Railway.</span>}
-      </div>
+      {graphConfigured() && (
+        <ActionForm className="inline-form" action={connectMicrosoftApp.bind(null, clientId)}>
+          <label style={{ flex: 2 }}>Microsoft 365 address<input name="ms_email" type="email" defaultValue={box?.provider === 'microsoft' ? box.email : ''} placeholder="zain@libraprofs.com" /></label>
+          <label style={{ flex: 1 }}>Sign emails as<input name="ms_from_name" defaultValue={box?.from_name ?? ''} placeholder="Zain Akeel" /></label>
+          <button type="submit" style={{ alignSelf: 'flex-end' }}>Connect through Microsoft app</button>
+        </ActionForm>
+      )}
+      <p className="muted" style={{ fontSize: 13 }}>
+        Uses the Microsoft app access Kacity already has (no sign-in, no password).
+        {microsoftConfigured() && <> If that app is not allowed to send, try <a href={`/oauth/microsoft/start?client=${clientId}`}>signing in with Microsoft</a> instead.</>}
+      </p>
       {!secretConfigured() && <p className="error">APP_SECRET is not set on the server, so passwords cannot be saved. Add it in Railway (a long random value).</p>}
       {box && (
         <p>
-          <strong>{box.email}</strong> <span className="muted">· {box.auth === 'oauth' ? 'connected with Microsoft · ' : ''}signed &quot;{box.from_name}&quot; · up to {box.daily_limit} a day</span>{' '}
+          <strong>{box.email}</strong> <span className="muted">· {box.auth === 'oauth' ? 'connected with Microsoft · ' : box.auth === 'graph' ? 'through the Microsoft app · ' : ''}signed &quot;{box.from_name}&quot; · up to {box.daily_limit} a day</span>{' '}
           {box.verified_at
             ? <span className="pill signed">Connected {box.verified_at}</span>
             : <span className="pill missing">Not tested</span>}

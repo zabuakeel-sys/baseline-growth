@@ -5,6 +5,7 @@ import { query } from '@/lib/db';
 import { requireOwner } from '@/lib/auth';
 import { PROVIDERS, clientAccount, verifyAccount } from '@/lib/mail';
 import { encrypt, secretConfigured } from '@/lib/secret';
+import { checkMailbox, graphConfigured } from '@/lib/graph';
 import { parseWholeNumber } from '@/lib/money';
 
 type Result = { error?: string; field?: string };
@@ -74,4 +75,41 @@ export async function removeMailbox(clientId: number): Promise<Result> {
   await requireOwner();
   await query('DELETE FROM client_mailboxes WHERE client_id = $1', [clientId]);
   return back(clientId, 'Mailbox removed');
+}
+
+/**
+ * Connects a Microsoft 365 mailbox through the Microsoft app's own access (as Kacity does):
+ * no sign-in and no password. Checks with Microsoft what the app is allowed to do first.
+ */
+export async function connectMicrosoftApp(clientId: number, formData: FormData): Promise<Result> {
+  await requireOwner();
+  if (!graphConfigured()) return { error: 'MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET and MICROSOFT_TENANT_ID must all be set in Railway.' };
+  const email = String(formData.get('ms_email') ?? '').trim().toLowerCase();
+  if (!EMAIL.test(email)) return { error: 'Type the mailbox address, like zain@libraprofs.com.', field: 'ms_email' };
+  const fromName = String(formData.get('ms_from_name') ?? '').trim().replace(/["<>]/g, '');
+  if (!fromName) return { error: 'Add the name emails are signed with.', field: 'ms_from_name' };
+  let c;
+  try {
+    c = await checkMailbox(email);
+  } catch (err) {
+    const msg = (err as Error).message;
+    const hint = /ErrorAccessDenied|Access is denied|403/.test(msg)
+      ? ' The app is not allowed to open this mailbox (an admin may have limited it to other mailboxes).'
+      : /ResourceNotFound|MailboxNotEnabled|404/.test(msg) ? ' No mailbox with that address in this Microsoft 365 organization.' : '';
+    return { error: `${msg}.${hint}`, field: 'ms_email' };
+  }
+  if (!c.canSend) {
+    return { error: `The Microsoft app Kacity uses is not allowed to send email. Permissions it has: ${c.roles.join(', ') || 'none for mail'}. It needs Mail.Send (application), which only a Microsoft 365 admin can grant.` };
+  }
+  const existing = (await query<{ daily_limit: number }>('SELECT daily_limit FROM client_mailboxes WHERE client_id = $1', [clientId])).rows[0];
+  const note = c.canRead ? '' : 'Sending works. Replies are not read automatically (the app lacks Mail.Read), so watch this inbox yourself.';
+  await query(
+    `INSERT INTO client_mailboxes (client_id, from_name, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure,
+       username, password_enc, daily_limit, auth, refresh_token_enc, verified_at, last_error)
+     VALUES ($1, $2, $3, 'microsoft', 'graph.microsoft.com', 443, true, 'graph.microsoft.com', 443, true, $3, '', $4, 'graph', '', now(), $5)
+     ON CONFLICT (client_id) DO UPDATE SET from_name = $2, email = $3, provider = 'microsoft', smtp_host = 'graph.microsoft.com', smtp_port = 443,
+       imap_host = 'graph.microsoft.com', imap_port = 443, username = $3, password_enc = '', auth = 'graph', refresh_token_enc = '',
+       verified_at = now(), last_error = $5`,
+    [clientId, fromName, email, existing?.daily_limit ?? 20, note]);
+  return back(clientId, `Connected ${email} through the Microsoft app${c.canRead ? ': sending and reading replies work' : ': sending works'}`);
 }
