@@ -58,6 +58,7 @@ export async function runAutopilot(): Promise<AutopilotReport> {
         await runSearch(next.id);
       } catch (err) {
         report.notes.push(`${client.name}: search failed: ${(err as Error).message}`);
+        console.error(`autopilot: ${client.name} search failed:`, (err as Error).message);
         break;
       }
       pool = await loadPool();
@@ -72,5 +73,8 @@ export async function runAutopilot(): Promise<AutopilotReport> {
     want -= added;
   }
   if (canSearch && searchesLeft <= 0) report.notes.push('Daily search limit reached');
+  if (report.searches || report.added || report.notes.length) {
+    console.log(`autopilot: ${report.searches} searches, ${report.added} added${report.notes.length ? ` | ${report.notes.join(' | ')}` : ''}`);
+  }
   return report;
 }

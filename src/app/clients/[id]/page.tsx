@@ -48,6 +48,9 @@ export default async function ClientPage({
   const targets = (await query<{ id: number; what: string; location: string; last_run_at: string | null; last_found: number | null }>(
     `SELECT id, what, location, to_char(last_run_at AT TIME ZONE 'America/Detroit', 'Mon DD') AS last_run_at, last_found
      FROM targets WHERE client_id = $1 ORDER BY last_run_at NULLS FIRST, id`, [id])).rows;
+  // The last autopilot run's notes that concern this business (e.g. a failed search).
+  const lastRun = (await query<{ last_autopilot: string }>('SELECT last_autopilot FROM outreach_settings WHERE id = 1')).rows[0]?.last_autopilot ?? '';
+  const autopilotNotes = (lastRun.split('|')[3] ?? '').split('; ').filter((n) => n.startsWith(`${client.name}:`)).map((n) => n.slice(client.name.length + 1).trim());
   const addedToday = leads.filter((l) => l.source === 'Research' && l.received_on === today()).length;
   const { saved } = await searchParams;
   const now = today();
@@ -102,8 +105,9 @@ export default async function ClientPage({
           {client.autopilot
             ? `Every day it finds businesses that match ${client.name}'s answers, adds up to ${client.daily_prospects} new prospects, splits them among your reps, and starts outreach. Added today: ${addedToday}.`
             : 'Off: no new prospects are found or added for this business.'}
-          {client.autopilot && !placesConfigured() && ' It cannot search until the Google Places key is added (see the checklist on the Clients page).'}
+          {client.autopilot && !placesConfigured() && ' It cannot search until the Google Places key is added.'}
         </p>
+        {autopilotNotes.length > 0 && <p className="error" style={{ marginTop: 0 }}>Last run: {autopilotNotes.join('. ')}</p>}
         {isOwner && (
           <ActionForm className="inline-form" action={saveAutopilot.bind(null, id)}>
             <label className="check"><input type="checkbox" name="autopilot" defaultChecked={client.autopilot} style={{ minHeight: 0 }} /> On</label>
