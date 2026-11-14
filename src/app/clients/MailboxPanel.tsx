@@ -1,5 +1,5 @@
 import { query } from '@/lib/db';
-import { PROVIDERS } from '@/lib/mail';
+import { PROVIDERS, mailStatus } from '@/lib/mail';
 import { secretConfigured } from '@/lib/secret';
 import { microsoftConfigured } from '@/lib/msoauth';
 import { connectMicrosoftApp, removeMailbox, saveMailbox, testMailbox } from './mailbox';
@@ -14,11 +14,19 @@ export default async function MailboxPanel({ clientId, clientName }: { clientId:
     `SELECT auth, from_name, email, provider, smtp_host, smtp_port, imap_host, imap_port, daily_limit, last_error,
        to_char(verified_at AT TIME ZONE 'America/Detroit', 'Mon DD, HH12:MI AM') AS verified_at
      FROM client_mailboxes WHERE client_id = $1`, [clientId])).rows[0];
+  const shared = mailStatus();
   return (
     <section className="card" aria-labelledby="mailbox-h">
       <h2 id="mailbox-h">Mailbox</h2>
+      {!box && shared.send && (
+        <p className="notice" role="status" style={{ marginTop: 0 }}>
+          Outreach for {clientName} goes out through your shared Baseline Growth mailbox, shown to the recipient as
+          <strong> {clientName}</strong>, with replies landing in that inbox and sorted back here. Nothing more to set up.
+          Connect a separate mailbox below only if {clientName} wants its own address.
+        </p>
+      )}
       <p className="muted" style={{ marginTop: 0 }}>
-        The address {clientName} gave you for outreach. Emails for {clientName} go out from it and replies are read from it.
+        A separate outreach address for {clientName} (optional). Emails then go out from it and replies are read from it.{' '}
         <strong>Microsoft 365 / Outlook:</strong> connect through the Microsoft app below (no password).{' '}
         <strong>Google:</strong> use an app password from myaccount.google.com/apppasswords, never the normal password.
       </p>

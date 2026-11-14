@@ -79,7 +79,10 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   if (first.length !== 4) fail('expected 4 sent');
   const ann = first.find((m) => m.to.includes('ann@'));
   if (!ann.text.includes('100 Example Ave') || !ann.text.includes('reply "no thanks"') || ann.subject !== 'Quick question from LibraPro Facility Services') fail('message content wrong');
-  if (!ann.from.includes('zaino@outreach.example')) fail('wrong sender');
+  if (!ann.from.includes('zaino@outreach.example')) fail('wrong sender address');
+  // Shared mailbox shows the business name as the sender, but the signature stays the human name.
+  if (!ann.from.includes('LibraPro Facility Services')) fail(`sender name should be the business: ${ann.from}`);
+  if (!ann.text.includes('Zaino\nOn behalf of LibraPro Facility Services')) fail('signature should be the human name, on behalf of the business');
   const id = (who) => first.find((m) => m.to.includes(who)).messageId;
 
   // Replies arrive in the mailbox

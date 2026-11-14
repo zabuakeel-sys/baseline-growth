@@ -72,7 +72,7 @@ async function queueDue(settings: Settings) {
           ? await personalLine({ name: l.name, about: l.notes, need: l.need, rating: l.rating, reviews: l.reviews, city: cityOf(l.address), clientName: l.client_name, offer: l.offer })
           : null;
         const body = messageFor(l.touches_sent, {
-          leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName: nameOf(account.from), address: l.mailing_address,
+          leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName: account.senderName ?? nameOf(account.from), address: l.mailing_address,
           personal: personal || undefined,
         });
         const r = await query(
@@ -250,7 +250,7 @@ async function createReplyDraft(leadId: number, replyId: number, m: { messageId:
     leadName: l.name, theyWrote: said(m.text), clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step,
     claimUrl: l.claim_url, script: l.call_script, pricing,
   });
-  const body = draft.reply + signOff({ clientName: l.client_name, senderName: nameOf(account.from), address: l.mailing_address });
+  const body = draft.reply + signOff({ clientName: l.client_name, senderName: account.senderName ?? nameOf(account.from), address: l.mailing_address });
   const subject = /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject || `Quick question from ${l.client_name}`}`;
   await query(
     `INSERT INTO outbox (lead_id, client_id, kind, reply_id, intent, to_email, subject, body, status, in_reply_to)

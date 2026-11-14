@@ -146,6 +146,13 @@ and shown under Outbox, Reply drafts. Drafts are never sent without a person pre
 send, even in automatic mode. Without the key, the email has no personal line and the draft is a
 short template.
 
+**One shared Baseline Growth mailbox for every business.** A business with no mailbox of its own
+sends through the shared mailbox (`OUTREACH_FROM`, `SMTP_*`, `IMAP_*`), but the recipient sees the
+**business's name** as the sender (for example "AutoAt <outreach@yourdomain>"), with the signature
+still the human name and "On behalf of <business>" in the body. All replies land in that one inbox
+and are sorted back to the right business by the prospect they came from. A business connects its
+own address only if it wants a separate one.
+
 **Automatic sending and replies (Outbox).** Every 5 minutes the server queues messages that are
 due, sends approved ones on weekdays inside the sending hours (default 9 to 17, Michigan time) up
 to a daily cap (default 20), and reads the outreach inbox. Replies are matched to prospects by

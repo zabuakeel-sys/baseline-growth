@@ -21,6 +21,7 @@ export type MailAccount = {
   from: string;
   smtp: { host: string; port: number; secure: boolean; user: string; pass: string };
   imap: { host: string; port: number; secure: boolean; user: string; pass: string } | null;
+  senderName?: string; // human name for the email signature; defaults to the From display name
   dailyLimit: number | null; // null = the shared outreach limit applies
   oauth?: { refreshToken: string }; // "Connect with Microsoft": sign in with a token, no password
   graph?: { mailbox: string };      // Microsoft Graph with the app's own access: no sign-in at all
@@ -48,10 +49,19 @@ export function sharedAccount(): MailAccount | null {
   const smtpPort = Number(env('SMTP_PORT') || 465);
   const imapPort = Number(env('IMAP_PORT') || 993);
   return {
-    key: 'shared', clientId: null, from: s.from, dailyLimit: null,
+    key: 'shared', clientId: null, from: s.from, senderName: nameOfFrom(s.from), dailyLimit: null,
     smtp: { host: env('SMTP_HOST'), port: smtpPort, secure: secureFlag('SMTP_SECURE', smtpPort), user: env('SMTP_USER'), pass: env('SMTP_PASS') },
     imap: s.read ? { host: env('IMAP_HOST'), port: imapPort, secure: secureFlag('IMAP_SECURE', imapPort), user: env('IMAP_USER'), pass: env('IMAP_PASS') } : null,
   };
+}
+
+const addressOfFrom = (from: string) => from.match(/<([^>]+)>/)?.[1] ?? from.trim();
+const nameOfFrom = (from: string) => from.replace(/<[^>]*>/, '').replace(/"/g, '').trim();
+
+/** A "From" that shows `name` but keeps the shared mailbox's real address (e.g. "AutoAt <outreach@...>"). */
+export function withSenderName(sharedFrom: string, name: string) {
+  const clean = name.replace(/["<>]/g, '').trim();
+  return clean ? `${clean} <${addressOfFrom(sharedFrom)}>` : sharedFrom;
 }
 
 type MailboxRow = {
@@ -102,9 +112,18 @@ export async function allClientAccounts(): Promise<MailAccount[]> {
   return out;
 }
 
-/** The mailbox outreach for this client goes out from: its own, else the shared one. */
+/**
+ * The mailbox outreach for this client goes out from: its own if it has one, else the shared
+ * Baseline Growth mailbox, shown as the business's name (so the recipient sees "AutoAt" or
+ * "LibraPro" as the sender, with replies landing in the one shared inbox and sorted back by lead).
+ */
 export async function outreachAccount(clientId: number) {
-  return (await clientAccount(clientId)) ?? sharedAccount();
+  const own = await clientAccount(clientId);
+  if (own) return own;
+  const shared = sharedAccount();
+  if (!shared) return null;
+  const c = (await query<{ name: string }>('SELECT name FROM clients WHERE id = $1', [clientId])).rows[0];
+  return c ? { ...shared, from: withSenderName(shared.from, c.name), senderName: shared.senderName } : shared;
 }
 
 const transports = new Map<string, { sig: string; t: Transporter }>();
