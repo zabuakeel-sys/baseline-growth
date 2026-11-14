@@ -6,9 +6,10 @@ import { addCandidates, runSearch } from './finderRun';
 import { placesConfigured } from './places';
 import { today } from './work';
 
-// After a failed search (bad key, API off, billing) wait before asking Google again.
+// After a failed search, wait a short while before trying again. The source is free (OpenStreetMap),
+// so a failure is usually the free service being briefly busy, not a problem that needs a long pause.
 let searchPausedUntil = 0;
-const PAUSE_AFTER_FAILURE_MS = 30 * 60_000;
+const PAUSE_AFTER_FAILURE_MS = 8 * 60_000;
 
 export type AutopilotReport = { searches: number; added: number; notes: string[] };
 
@@ -65,8 +66,8 @@ export async function runAutopilot(): Promise<AutopilotReport> {
         report.notes.push(`${client.name}: search failed: ${(err as Error).message}`);
         console.error(`autopilot: ${client.name} search failed:`, (err as Error).message);
         searchPausedUntil = Date.now() + PAUSE_AFTER_FAILURE_MS;
-        searchesLeft = 0; // the same key fails for every business; stop for this run
-        break;
+        break; // stop searching for this business this run; other businesses still get their turn
+
       }
       pool = await loadPool();
     }
