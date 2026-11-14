@@ -23,9 +23,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // Empty system: the checklist says what to do first
   await o.goto(base + '/');
-  const check = await o.textContent('section[aria-labelledby=todo-h]');
-  if (!check.includes('Add your first business')) fail('Home should say to add the first business');
-  if (check.includes('Connect business search')) fail('search is connected in this test');
+  const check = await o.textContent('main');
+  if (!check.includes('No businesses yet')) fail('Home should prompt to add the first business');
 
   // Two reps
   for (const [name, email] of [['Rita Rep', 'rita@example.test'], ['Ben Rep', 'ben@example.test']]) {
@@ -62,7 +61,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await fill('contract_start', new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date()));
   await fill('mailing_address', '100 Example Ave, Detroit, MI 48201');
   await o.click('text=Set up this business');
-  await o.waitForSelector('p.notice:has-text("set up with 4 searches")');
+  await o.waitForSelector('p.notice:has-text("is set up. Review and approve")');
   console.log('setup:', await o.textContent('p.notice'));
   const auto = await o.textContent('section[aria-labelledby=autopilot-h]');
   if (!auto.includes('On') || !auto.includes('4 searches')) fail('autopilot panel wrong');
@@ -120,8 +119,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // Checklist moves on
   await o.goto(base + '/');
-  const home = await o.textContent('section[aria-labelledby=todo-h]');
-  if (home.includes('Add your first business') || home.includes('Add a sales rep')) fail('Home should move past the first steps');
+  const home = await o.textContent('main');
+  if (home.includes('No businesses yet')) fail('Home should show the businesses after setup');
   await o.screenshot({ path: S + '/27-home-checklist.png', fullPage: false });
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL CHECKS PASSED');

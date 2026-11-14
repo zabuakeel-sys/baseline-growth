@@ -1,4 +1,5 @@
 import { QUESTIONS } from '@/lib/onboarding';
+import { PLAYS, getPlay } from '@/lib/plays';
 import ActionForm from '../ActionForm';
 import CopyButton from '../leads/CopyButton';
 
@@ -23,6 +24,7 @@ export default function OnboardingForm({ action, answers, editing, filled, fromS
       : null;
   const val = (k: string) => (answers?.[k] == null ? '' : String(answers[k]));
   const pairs = answers?.objections ?? [];
+  const play = getPlay(val('play'));
   return (
     <>
       {!editing && fromSite && (
@@ -44,6 +46,30 @@ export default function OnboardingForm({ action, answers, editing, filled, fromS
         </div>
       )}
       <ActionForm action={action}>
+        {play ? (
+          <fieldset className="card area">
+            <legend>Strategy</legend>
+            <p style={{ margin: 0 }}><strong>{play.name}</strong></p>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{play.rhythm} You can change the goal in the answers above and the first email below.</p>
+            <input type="hidden" name="play" value={play.key} />
+            <input type="hidden" name="claim_label" value={val('claim_label')} />
+          </fieldset>
+        ) : (
+          <fieldset className="card area">
+            <legend>Strategy</legend>
+            <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>Pick the play that fits. It sets the first email and the rhythm. &quot;Write my own&quot; leaves the email to you.</p>
+            <div className="grid">
+              {PLAYS.map((p) => (
+                <label key={p.key} className="check full" style={{ alignItems: 'flex-start' }}>
+                  <input type="radio" name="play" value={p.key} style={{ minHeight: 0, marginTop: 3 }} />
+                  <span><strong>{p.name}</strong><br /><span className="muted" style={{ fontSize: 13 }}>{p.best_for}</span></span>
+                </label>
+              ))}
+              <label className="check full"><input type="radio" name="play" value="" defaultChecked style={{ minHeight: 0 }} /> Write my own email</label>
+            </div>
+            <input type="hidden" name="claim_label" value={val('claim_label')} />
+          </fieldset>
+        )}
         {sections.map((section) => (
           <fieldset key={section} className="card area">
             <legend>{section}</legend>
@@ -73,6 +99,18 @@ export default function OnboardingForm({ action, answers, editing, filled, fromS
             </div>
           </fieldset>
         ))}
+        <fieldset className="card area">
+          <legend>First email{play ? '' : ' (optional)'}</legend>
+          <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+            The first email every prospect gets. It fills in per prospect: <code>{'{first_name}'}</code> (or &quot;Hi there,&quot;),{' '}
+            <code>[Shop Name]</code>, <code>[City]</code>, <code>{'{business}'}</code> (the business name), and a claim link (write{' '}
+            <code>[claim your free account]</code> and it becomes your booking link). The opt-out line and mailing address are added automatically.
+          </p>
+          <div className="grid">
+            <label className="full">Subject<input name="outreach_subject" defaultValue={val('outreach_subject')} /></label>
+            <label className="full">Email<textarea name="outreach_body" defaultValue={val('outreach_body')} rows={10} style={{ fontFamily: 'inherit' }} /></label>
+          </div>
+        </fieldset>
         <div className="card">
           {!editing && (
             <label className="check" style={{ marginBottom: 12 }}>

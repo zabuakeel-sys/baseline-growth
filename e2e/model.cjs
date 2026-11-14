@@ -27,7 +27,8 @@ const base = 'http://localhost:3100';
   await login(p, 'owner@example.test', 'testpassword123');
 
   // LibraPro deal: 10% for 36 months, plus offer and address
-  await p.click('table >> text=LibraPro Facility Services');
+  await p.goto(base + '/');
+  await p.click('.biz-card:has-text("LibraPro Facility Services")');
   await p.waitForSelector('#leads-h');
   const clientUrl = p.url().split('#')[0].split('?')[0];
   await p.selectOption('select[name=status]', 'active');
@@ -128,11 +129,10 @@ const base = 'http://localhost:3100';
   console.log('opted out:', await p.textContent('p.error'));
 
   // Dashboard counts
-  await p.goto(base + '/clients');
-  const dash = (await p.textContent('table')).replace(/\s+/g, ' ');
-  console.log('businesses:', dash);
-  const cells = await p.locator('tr', { hasText: 'LibraPro Facility Services' }).locator('td.num').allTextContents();
-  if (cells[0] !== '1' || cells[2] !== '1') fail(`business counts wrong: ${cells}`);
+  await p.goto(base + '/');
+  const card = (await p.textContent('.biz-card:has-text("LibraPro Facility Services")')).replace(/\s+/g, ' ');
+  console.log('LibraPro card:', card);
+  if (!/1 in play/.test(card) || !/1 customers/.test(card)) fail(`business counts wrong: ${card}`);
 
   // Team member: no money anywhere, cannot change a confirmed amount
   await p.goto(base + '/team');

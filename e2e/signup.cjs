@@ -36,8 +36,13 @@ const site = http.createServer((req, res) => {
   await p.goto(base + '/clients/new');
   await p.fill('input[name=website]', 'http://127.0.0.1:3400/');
   await p.click('button:has-text("Read their website")');
+  // Pick a strategy (play) before the answer form appears; it fills the rhythm and the first email.
+  await p.waitForSelector('h1:has-text("Pick a strategy for Shine Cleaning")', { timeout: 60_000 });
+  await p.click('.play-card:has-text("Book a free walkthrough") button');
   await p.waitForSelector('p.notice:has-text("Read http://127.0.0.1:3400/")', { timeout: 60_000 });
   const v = (n) => p.inputValue(`[name=${n}]`);
+  // The play set the first email and turned on visits.
+  if (!(await v('outreach_subject')).trim() || !(await v('outreach_body')).includes('walkthrough')) fail('the play should fill the first email');
   if ((await v('name')) !== 'Shine Cleaning') fail(`name: ${await v('name')}`);
   if (!(await v('offer')).startsWith('Shine Cleaning does nightly office')) fail('offer not drafted');
   if ((await v('who')) !== 'dental office\nmedical clinic' || (await v('where')) !== 'Troy, MI\nSouthfield, MI') fail('customer types or places not drafted');
@@ -64,7 +69,8 @@ const site = http.createServer((req, res) => {
   await p.fill('[name=share_percent]', '12');
   await p.fill('[name=share_months]', '24');
   await p.click('button:has-text("Set up this business")');
-  await p.waitForSelector('p.notice:has-text("is set up with 4 searches")');
+  await p.waitForSelector('p.notice:has-text("is set up. Review and approve")');
+  if (psql("SELECT play FROM clients WHERE name = 'Shine Cleaning'") !== 'free_walkthrough') fail('play should be saved on the client');
   const c = psql("SELECT offer || '|' || claim_url || '|' || logo_url || '|' || share_percent FROM clients WHERE name = 'Shine Cleaning'");
   if (c !== 'Shine Cleaning does nightly office and medical cleaning across Oakland County.|https://calendly.com/shine/walkthrough|https://shine.example/shine-logo.png|12.00') fail(`saved wrong: ${c}`);
 

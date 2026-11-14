@@ -7,6 +7,7 @@ import { QUESTIONS, TERM_KEYS, buildScript, buildTargets, missingQuestions, obje
 import { readSite } from '@/lib/research';
 import { draftSignup } from '@/lib/coach';
 import { parsePricingLines } from '@/lib/playbook';
+import { applyPlay } from '@/lib/plays';
 import { parseDollarsToCents, parsePercent, parseWholeNumber } from '@/lib/money';
 
 type Result = { error?: string; field?: string };
@@ -45,12 +46,20 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   const objections = objectionPairs(get);
   const answers: Record<string, unknown> = Object.fromEntries(QUESTIONS.filter((q) => !q.pairs).map((q) => [q.key, get(q.key)]));
   answers.objections = objections;
+  // The strategy (play) sets the first email and the claim-button label, and fills them server-side
+  // if the form did not carry them (the by-hand path). A chosen play's own email wording wins only
+  // when the owner left the email blank.
+  const applied = get('play') ? applyPlay(get('play'), { businessName: get('name') }) : null;
+  const outreachSubject = get('outreach_subject') || applied?.outreach_subject || '';
+  const outreachBody = get('outreach_body') || applied?.outreach_body || '';
+  const claimLabel = get('claim_label') || applied?.claim_label || (get('first_step') ? `Book your ${get('first_step').toLowerCase().replace(/^(a|an|the)\s+/, '')}` : '');
   const fields = {
     name: get('name'), website: get('website'), contact_name: get('contact_name'), contact_email: get('contact_email'),
-    contact_phone: get('contact_phone'), offer: get('offer').replace(/\s+/g, ' '), goal: get('goal'), why_us: get('why_us'), first_step: get('first_step'),
-    claim_url: get('claim_url'), claim_label: get('first_step') ? `Book your ${get('first_step').toLowerCase().replace(/^(a|an|the)\s+/, '')}` : '',
+    contact_phone: get('contact_phone'), offer: (get('offer') || applied?.offer || '').replace(/\s+/g, ' '), goal: get('goal') || applied?.goal || '', why_us: get('why_us'), first_step: get('first_step') || applied?.first_step || '',
+    claim_url: get('claim_url'), claim_label: claimLabel,
     visits: get('visits') === 'yes', logo_url: get('logo_url'),
     customer_value_cents: value, mailing_address: get('mailing_address'),
+    play: applied ? applied.play : '', outreach_subject: outreachSubject, outreach_body: outreachBody,
     share_percent: share ?? 0, share_months: months, signup_fee_cents: signup ?? 0, monthly_fee_cents: monthly ?? 0,
     contract_start: get('contract_start') || null,
     pricing: types.length ? JSON.stringify({ types, minimumCents: 0, rangePercent: 10 }) : null,
@@ -81,8 +90,38 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   revalidatePath('/');
   revalidatePath(`/clients/${id}`);
   redirect(`/clients/${id}?saved=${encodeURIComponent(clientId === null
-    ? `${fields.name} is set up with ${targets.length} searches. Autopilot will start finding prospects for your reps`
-    : 'Answers saved')}`);
+    ? `${fields.name} is set up. Review and approve the first email below, then prospects start coming in`
+    : 'Answers saved')}${clientId === null ? '#approve-h' : ''}`);
+}
+
+/**
+ * Picking a strategy (play) while adding a business: fills the goal, offer, first step, rhythm and
+ * the first email into the draft from the play, then returns to the form where the owner tweaks and
+ * approves the email. Only fills fields the website draft left blank, except the email, which the
+ * play always provides (and the owner then edits).
+ */
+export async function applyPlayToDraft(draftId: number, playKey: string): Promise<Result> {
+  await requireOwner();
+  const draft = (await query<{ answers: Record<string, unknown>; filled: string[] }>(
+    'SELECT answers, filled FROM onboarding_drafts WHERE id = $1', [draftId])).rows[0];
+  if (!draft) return { error: 'That draft expired. Start again from the website.' };
+  const a = draft.answers ?? {};
+  const applied = applyPlay(playKey, { businessName: String(a.name ?? '') });
+  if (!applied) return { error: 'Pick one of the strategies.' };
+  const keep = (k: string, fallback: string) => (String(a[k] ?? '').trim() ? a[k] : fallback);
+  const answers = {
+    ...a,
+    play: applied.play,
+    goal: keep('goal', applied.goal),
+    offer: keep('offer', applied.offer),
+    first_step: keep('first_step', applied.first_step),
+    claim_label: applied.claim_label,
+    visits: applied.visits ? 'yes' : (a.visits || 'no'),
+    outreach_subject: applied.outreach_subject,
+    outreach_body: applied.outreach_body,
+  };
+  await query('UPDATE onboarding_drafts SET answers = $2 WHERE id = $1', [draftId, JSON.stringify(answers)]);
+  redirect(`/clients/new?draft=${draftId}`);
 }
 
 /** Autopilot on or off for a business, and how many new prospects a day. */

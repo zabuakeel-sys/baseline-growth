@@ -19,7 +19,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
 
   // The menu is short
   const nav = (await p.locator('header nav a').allTextContents()).join('|');
-  if (nav !== 'Home|Next up|Businesses|Team|Money') fail(`menu should be Home, Next up, Businesses, Team, Money; got ${nav}`);
+  if (nav !== 'Home|Team|Money') fail(`menu should be Home, Team, Money; got ${nav}`);
 
   // LibraPro has its answers and a tested mailbox: Home asks to approve its first email
   const id = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
@@ -30,9 +30,9 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   psql(`INSERT INTO client_mailboxes (client_id, from_name, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, imap_secure, username, password_enc, verified_at)
         VALUES (${id}, 'Zaino', 'sales@libra.example', 'other', 'smtp.libra.example', 465, true, 'imap.libra.example', 993, true, 'sales@libra.example', 'v1:x:x:x', now())`);
   await p.goto(base + '/');
-  const todo = await p.textContent('section[aria-labelledby=todo-h]');
-  if (!todo.includes('LibraPro Facility Services: write and approve the first email')) fail('Home should ask to write/approve LibraPro email');
-  if (!todo.includes('AutoAt: finish the owner\'s answers')) fail('AutoAt should be at its first setup step');
+  const home = await p.textContent('.biz-list');
+  if (!home.includes('LibraPro Facility Services') || !home.includes('Review and approve the first email')) fail('Home should show LibraPro needing email approval');
+  if (!home.includes('AutoAt') || !home.includes('Finish the owner\'s answers')) fail('Home should show AutoAt at its first setup step');
   await p.screenshot({ path: S + '/31-home.png', fullPage: true });
 
   // Write and perfect the email on the business page, then start sending (two separate steps).
@@ -48,11 +48,10 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await p.waitForSelector('p.notice:has-text("Approved")');
   if (psql(`SELECT outreach_approved_at IS NOT NULL FROM clients WHERE id = ${id}`) !== 't') fail('approval not saved');
   await p.goto(base + '/');
-  if ((await p.textContent('section[aria-labelledby=todo-h]')).includes('write and approve the first email')) fail('approved business should leave the list');
+  if ((await p.textContent('.biz-list')).includes('Review and approve the first email')) fail('approved business should no longer ask for email approval');
+  if (!(await p.textContent('.biz-list')).includes('Live')) fail('Home should show LibraPro as live after approval');
   await p.goto(`${base}/clients/${id}`);
   if (!(await p.locator('.steps li.done').count()) || !(await p.locator('text=Sending is on').count())) fail('business page should show setup steps and sending on');
-  await p.goto(base + '/clients');
-  if (!(await p.textContent('table')).includes('Starting')) fail('Businesses should show LibraPro as starting');
 
   // Next up: a reply, a due call, a new prospect, a call not due yet
   const D = "(now() AT TIME ZONE 'America/Detroit')::date";

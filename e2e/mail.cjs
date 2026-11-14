@@ -31,10 +31,10 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   await p.fill('input[name=email]', 'owner@example.test');
   await p.fill('input[name=password]', 'testpassword123');
   await p.click('button[type=submit]');
-  await p.waitForURL((u) => !u.pathname.startsWith('/login')); await p.goto(base + '/clients');
+  await p.waitForURL((u) => !u.pathname.startsWith('/login')); await p.goto(base + '/');
 
   // Client setup: offer, contact email; leave the address out at first
-  await p.click('table >> text=LibraPro Facility Services');
+  await p.click('.biz-card:has-text("LibraPro Facility Services")');
   await p.waitForSelector('#leads-h');
   const clientUrl = p.url().split('#')[0].split('?')[0];
   await p.fill('input[name=contact_email]', 'owner@libra.example');

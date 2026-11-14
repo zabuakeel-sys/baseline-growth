@@ -33,15 +33,19 @@ const BUTTONS: [string, string, string][] = [
 const time = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Detroit' });
 
 /** One prospect at a time, in the order that wins the most business. Log what happened and the next one comes up. */
-export default async function NextUp({ searchParams }: { searchParams: Promise<{ skip?: string; skipask?: string; who?: string; saved?: string }> }) {
+export default async function NextUp({ searchParams }: { searchParams: Promise<{ skip?: string; skipask?: string; who?: string; saved?: string; client?: string }> }) {
   const user = await requireUser();
   const isOwner = user.role === 'owner';
-  const { skip = '', skipask = '', who, saved } = await searchParams;
+  const { skip = '', skipask = '', who, saved, client } = await searchParams;
   const everyone = isOwner && who === 'all';
+  // Focus mode: work just one business's prospects, opened from that business's page.
+  const clientId = client && /^\d+$/.test(client) ? Number(client) : null;
   const now = today();
   const all = await leadsForDay(null);
   // Reps see their own prospects. The owner also picks up anything nobody is assigned to.
-  const mine = everyone ? all : all.filter((l) => l.assignee_id === user.id || (isOwner && l.assignee_id === null));
+  const base = everyone ? all : all.filter((l) => l.assignee_id === user.id || (isOwner && l.assignee_id === null));
+  const mine = clientId ? base.filter((l) => l.client_id === clientId) : base;
+  const clientName = clientId ? (mine[0]?.client_name ?? (await query<{ name: string }>('SELECT name FROM clients WHERE id = $1', [clientId])).rows[0]?.name ?? 'this business') : '';
   const skipped = skip.split(',').filter((s) => /^\d+$/.test(s));
   const queue = nextQueue(mine, now, skipped);
   const lead = queue[0];
@@ -76,13 +80,16 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
   // customer is the warmest source of the next one.
   const skippedAsks = skipask.split(',').filter((x) => /^\d+$/.test(x)).map(Number);
   const asks = [...allAsks.filter((a) => !skippedAsks.includes(a.id)), ...allAsks.filter((a) => skippedAsks.includes(a.id))];
-  const ask = asks.length && (!queue[0] || reasonFor(queue[0], now) === 'new') ? asks[0] : null;
+  const ask = !clientId && asks.length && (!queue[0] || reasonFor(queue[0], now) === 'new') ? asks[0] : null;
   const skipAskHref = ask ? `/next?${new URLSearchParams({ ...(everyone ? { who: 'all' } : {}), ...(skip ? { skip } : {}), skipask: [...skippedAsks, ask.id].join(',') })}` : '';
   const toGo = queue.length + asks.length;
   const total = done + toGo;
   const pct = total ? Math.round((done / total) * 100) : 100;
-  const back = `/next${everyone ? '?who=all' : ''}`;
-  const skipHref = lead ? `/next?${new URLSearchParams({ ...(everyone ? { who: 'all' } : {}), skip: [...skipped, String(lead.id)].join(',') })}` : '';
+  const backParams = new URLSearchParams();
+  if (everyone) backParams.set('who', 'all');
+  if (clientId) backParams.set('client', String(clientId));
+  const back = `/next${backParams.toString() ? `?${backParams}` : ''}`;
+  const skipHref = lead ? `/next?${new URLSearchParams({ ...(everyone ? { who: 'all' } : {}), ...(clientId ? { client: String(clientId) } : {}), skip: [...skipped, String(lead.id)].join(',') })}` : '';
   const reason = lead ? reasonFor(lead, now) : null;
   const channel = reason === 'visit' ? 'visit' : 'call';
   const tel = lead?.phone ? `tel:${lead.phone.replace(/[^\d+]/g, '')}` : '';
@@ -93,10 +100,13 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
     <div className="next-up">
       <div className="next-top">
         <div>
-          <h1 style={{ margin: 0 }}>Next up</h1>
-          <p className="muted" style={{ margin: '2px 0 0' }}>{done} done today · {toGo} to go</p>
+          <h1 style={{ margin: 0 }}>{clientId ? clientName : 'Next up'}</h1>
+          <p className="muted" style={{ margin: '2px 0 0' }}>
+            {done} done today · {toGo} to go
+            {clientId && <> · <Link href={`/clients/${clientId}`}>Back to {clientName}</Link></>}
+          </p>
         </div>
-        {isOwner && (
+        {isOwner && !clientId && (
           <div className="segmented">
             <Link href="/next" className={everyone ? '' : 'on'}>Mine</Link>
             <Link href="/next?who=all" className={everyone ? 'on' : ''}>Everyone</Link>
@@ -118,7 +128,7 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
       )}
       {saved && <p className="notice" role="status">{saved}.</p>}
 
-      {meetings.length > 0 && (
+      {!clientId && meetings.length > 0 && (
         <div className="card meetings-today">
           <strong>Meetings</strong>
           <ul className="plain-list">
@@ -167,8 +177,8 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
         <div className="card done-card">
           <h2>You are done for now</h2>
           <p className="muted" style={{ margin: 0 }}>
-            Nobody is due. New prospects are added every morning and follow-ups come back on their day.
-            {isOwner && <> Check <Link href="/">Home</Link> for anything waiting on you.</>}
+            Nobody is due{clientId ? ` for ${clientName}` : ''}. New prospects are added every morning and follow-ups come back on their day.
+            {clientId ? <> <Link href={`/clients/${clientId}`}>Back to {clientName}</Link>.</> : isOwner && <> Check <Link href="/">Home</Link> for anything waiting on you.</>}
           </p>
         </div>
       ) : (

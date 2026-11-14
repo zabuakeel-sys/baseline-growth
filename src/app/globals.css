@@ -211,3 +211,22 @@ button.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
 .pill.from-site { color: var(--accent); border-color: currentColor; font-weight: 400; }
 .pill.ask-owner { color: var(--warn); border-color: currentColor; font-weight: 400; }
 .invalid { outline: 2px solid var(--bad); outline-offset: 1px; }
+
+/* Strategy (play) picker cards when adding a business */
+.play-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.play-grid form { margin: 0; display: flex; }
+.play-card { display: flex; flex-direction: column; width: 100%; margin: 0; }
+.play-card button { margin-top: auto; }
+
+/* Home: business list cards */
+.biz-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.biz-card { display: block; text-decoration: none; color: inherit; transition: border-color .12s; }
+.biz-card:hover { border-color: var(--accent, #4f46e5); }
+.biz-head { display: flex; align-items: center; gap: 10px; }
+.biz-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; background: #fff; flex: 0 0 auto; }
+.biz-logo.placeholder { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted, #667); background: var(--line, #e5e7eb); text-transform: uppercase; }
+.biz-name { font-size: 16px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.biz-nums { display: flex; gap: 16px; margin-top: 10px; font-size: 14px; color: var(--muted, #667); }
+.biz-todo { margin-top: 10px; font-size: 13px; color: var(--accent, #4f46e5); font-weight: 600; }
+.settings-group { margin-top: 12px; }
+.settings-group > summary { cursor: pointer; font-weight: 600; padding: 8px 0; color: var(--muted, #667); }

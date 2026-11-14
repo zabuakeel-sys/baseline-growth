@@ -15,6 +15,7 @@ import { saveRepTools } from '../../tools/actions';
 import { saveAutopilot } from '../onboarding';
 import { query } from '@/lib/db';
 import { placesConfigured } from '@/lib/places';
+import { getPlay } from '@/lib/plays';
 import ClientForm from '../ClientForm';
 import MailboxPanel from '../MailboxPanel';
 import ApprovePanel from '../ApprovePanel';
@@ -62,6 +63,9 @@ export default async function ClientPage({
   const stats = leadStats(leads);
   const back = `/clients/${id}#leads-h`;
   const steps = isOwner ? await setupSteps(client) : null;
+  const play = getPlay(client.play);
+  const whoTypes = [...new Set(targets.map((t) => t.what))];
+  const wherePlaces = [...new Set(targets.map((t) => t.location))];
   const terms = [
     client.share_percent > 0 && `${client.share_percent}% of what each customer we bring pays${client.share_months ? ` for ${client.share_months} months` : ', for as long as they stay'}`,
     client.signup_fee_cents > 0 && `${formatCents(client.signup_fee_cents)} per new customer`,
@@ -89,9 +93,25 @@ export default async function ClientPage({
           })}
         </ol>
       )}
+      <section className="card" aria-labelledby="strategy-h">
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 id="strategy-h" style={{ margin: 0 }}>Strategy{play ? `: ${play.name}` : ''}</h2>
+          {isOwner && <Link className="button secondary small" href={`/clients/${id}/setup`}>Edit answers</Link>}
+        </div>
+        {client.goal
+          ? <p style={{ marginTop: 0 }}><strong>Goal:</strong> {client.goal}</p>
+          : <p className="muted" style={{ marginTop: 0 }}>No goal set yet. {isOwner && <Link href={`/clients/${id}/setup`}>Add one</Link>}</p>}
+        {client.offer && <p style={{ margin: '0 0 8px' }}><strong>Offer:</strong> {client.offer}</p>}
+        {play && <p className="muted" style={{ margin: '0 0 8px', fontSize: 14 }}><strong>Rhythm:</strong> {play.rhythm}</p>}
+        {whoTypes.length > 0 && (
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+            <strong>Finding:</strong> {whoTypes.slice(0, 4).join(', ')}{whoTypes.length > 4 ? ` and ${whoTypes.length - 4} more` : ''} in {wherePlaces.length} place{wherePlaces.length === 1 ? '' : 's'}
+          </p>
+        )}
+      </section>
       {isOwner && steps && steps[0].done && steps[1].done && (
         <section className="card" aria-labelledby="approve-h">
-          <h2 id="approve-h">Outreach email</h2>
+          <h2 id="approve-h">First email</h2>
           <ApprovePanel client={client} back={`/clients/${id}#approve-h`} />
         </section>
       )}
@@ -128,7 +148,10 @@ export default async function ClientPage({
       {isOwner && <MailboxPanel clientId={id} clientName={client.name} />}
 
       <section className="card" aria-labelledby="leads-h">
-        <h2 id="leads-h">1. Prospects we are reaching</h2>
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 id="leads-h" style={{ margin: 0 }}>Prospects</h2>
+          {inPlay.length > 0 && <Link className="button small" href={`/next?client=${id}`}>Work one at a time</Link>}
+        </div>
         {leads.length > 0 && (
           <div className="stats">
             <div className="stat"><div className="label">Prospects</div><div className="value">{stats.total}</div></div>
@@ -152,7 +175,7 @@ export default async function ClientPage({
       </section>
 
       <section className="card" aria-labelledby="customers-h">
-        <h2 id="customers-h">2. Customers we brought</h2>
+        <h2 id="customers-h">Customers we brought</h2>
         {customers.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>None yet. When a prospect buys from {client.name}, mark them &ldquo;Became a customer&rdquo;.</p>
         ) : (
@@ -213,7 +236,7 @@ export default async function ClientPage({
       </section>
 
       <section className="card" aria-labelledby="tasks-h">
-        <h2 id="tasks-h">3. Other work</h2>
+        <h2 id="tasks-h">Tasks</h2>
         {openTasks.length === 0 ? (
           <p className="muted" style={{ marginTop: 0 }}>No open tasks.</p>
         ) : (
@@ -243,7 +266,7 @@ export default async function ClientPage({
 
       {isOwner && (
         <section className="card" aria-labelledby="money-h">
-          <h2 id="money-h">4. What they owe us</h2>
+          <h2 id="money-h">What they owe us</h2>
           {money.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>Not billed yet. Set the status to active, a contract start date and the deal terms below.</p>
           ) : (

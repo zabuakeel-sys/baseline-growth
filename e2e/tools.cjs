@@ -19,8 +19,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   const ownerId = Number(psql("SELECT id FROM users WHERE email = 'owner@example.test'"));
 
   // Client setup: claim link, pricing, script with objection answers
-  await o.goto(base + '/clients');
-  await o.click('table >> text=LibraPro Facility Services');
+  await o.goto(base + '/');
+  await o.click('.biz-card:has-text("LibraPro Facility Services")');
   await o.waitForSelector('#tools-h');
   const clientUrl = o.url().split('#')[0].split('?')[0];
   const clientId = Number(clientUrl.split('/').pop());
