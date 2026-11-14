@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const clientId = Number(url.searchParams.get('client'));
   if (!user || user.role !== 'owner') return NextResponse.redirect(new URL('/login', request.url));
   if (!Number.isInteger(clientId) || clientId <= 0) return NextResponse.redirect(new URL('/clients', request.url));
-  const back = (msg: string) => NextResponse.redirect(new URL(`/clients/${clientId}?saved=${encodeURIComponent(msg)}#mailbox-h`, request.url));
+  const back = (msg: string) => NextResponse.redirect(new URL(`/clients/${clientId}/settings?saved=${encodeURIComponent(msg)}#mailbox-h`, request.url));
   if (!microsoftConfigured()) return back('Microsoft sign-in is not set up yet: MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET are missing in Railway');
   if (!secretConfigured()) return back('APP_SECRET is not set, so the connection cannot be stored safely');
   const state = randomBytes(24).toString('base64url');

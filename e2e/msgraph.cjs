@@ -25,7 +25,8 @@ const sent = () => JSON.parse(fs.readFileSync('/var/tmp/graph-sent.json', 'utf8'
   const id = psql("SELECT id FROM clients WHERE name LIKE 'LibraPro%'");
   const before = sent().length;
   const connect = async (email) => {
-    await p.goto(`${base}/clients/${id}`);
+    await p.goto(`${base}/clients/${id}/settings`);
+    await p.waitForSelector('#mailbox-h');
     await p.click('summary:has-text("Advanced")');
     await p.fill('input[name=ms_email]', email);
     await p.fill('input[name=ms_from_name]', 'Zain Akeel');

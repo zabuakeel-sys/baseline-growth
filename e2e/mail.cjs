@@ -35,13 +35,17 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
 
   // Client setup: offer, contact email; leave the address out at first
   await p.click('.biz-card:has-text("LibraPro Facility Services")');
-  await p.waitForSelector('#leads-h');
+  await p.waitForURL(/\/clients\/\d+$/);
   const clientUrl = p.url().split('#')[0].split('?')[0];
+  await p.goto(clientUrl + '/settings');
+  await p.waitForSelector('#details-h');
   await p.fill('input[name=contact_email]', 'owner@libra.example');
   await p.fill('input[name=contact_name]', 'Lina Pro');
   await p.fill('input[name=offer]', 'LibraPro handles commercial cleaning for offices in Michigan and Ohio.');
   await p.click('text=Save client');
   await p.waitForSelector('p.notice');
+  await p.goto(clientUrl + '/prospects');
+  await p.waitForSelector('#leads-h');
   for (const [name, email] of [['Ann Able', 'ann@a.example'], ['Bob Baker', 'bob@b.example'], ['Cy Cole', 'cy@c.example'], ['Di Dunn', 'di@d.example']]) {
     if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add one by hand")');
     await p.fill('input[name=name]', name);
@@ -55,7 +59,8 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   if (!(await runNow(p)).includes('0 queued')) fail('should not queue without a mailing address');
   if (!(await p.locator('text=Not queued: no mailing address').count())) fail('missing-address warning not shown');
 
-  await p.goto(clientUrl);
+  await p.goto(clientUrl + '/settings');
+  await p.waitForSelector('#details-h');
   await p.fill('input[name=mailing_address]', '100 Example Ave, Detroit, MI 48201');
   await p.click('text=Save client');
   await p.waitForSelector('p.notice');

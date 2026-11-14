@@ -16,7 +16,8 @@ export async function GET(request: Request) {
   const clientId = Number(rawClient);
   const go = (msg: string) => {
     const known = Number.isInteger(clientId) && clientId > 0;
-    const res = NextResponse.redirect(new URL(`/clients${known ? `/${clientId}` : ''}?saved=${encodeURIComponent(msg)}${known ? '#mailbox-h' : ''}`, request.url));
+    const path = known ? `/clients/${clientId}/settings?saved=${encodeURIComponent(msg)}#mailbox-h` : `/?saved=${encodeURIComponent(msg)}`;
+    const res = NextResponse.redirect(new URL(path, request.url));
     res.cookies.delete({ name: 'ms_oauth', path: '/oauth/microsoft' });
     return res;
   };

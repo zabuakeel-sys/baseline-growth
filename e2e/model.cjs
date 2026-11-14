@@ -29,8 +29,10 @@ const base = 'http://localhost:3100';
   // LibraPro deal: 10% for 36 months, plus offer and address
   await p.goto(base + '/');
   await p.click('.biz-card:has-text("LibraPro Facility Services")');
-  await p.waitForSelector('#leads-h');
+  await p.waitForURL(/\/clients\/\d+$/);
   const clientUrl = p.url().split('#')[0].split('?')[0];
+  await p.goto(clientUrl + '/settings');
+  await p.waitForSelector('#details-h');
   await p.selectOption('select[name=status]', 'active');
   await p.fill('input[name=share_percent]', '10');
   await p.fill('input[name=share_months]', '36');
@@ -39,10 +41,11 @@ const base = 'http://localhost:3100';
   await p.fill('input[name=mailing_address]', '100 Example Ave, Detroit, MI 48201');
   await p.click('text=Save client');
   await p.waitForSelector('p.notice');
-  const sub = await p.textContent('p.sub');
-  if (!sub.includes('10% of what each customer we bring pays for 36 months')) fail('terms line wrong: ' + sub);
+  if ((await p.inputValue('input[name=share_percent]')) !== '10' || (await p.inputValue('input[name=share_months]')) !== '36') fail('deal terms not saved');
 
-  // Prospects
+  // Prospects (full list on its own page now)
+  await p.goto(clientUrl + '/prospects');
+  await p.waitForSelector('#leads-h');
   const add = async (name, email, need) => {
     if (!(await p.locator('input[name=need]').isVisible())) await p.click('summary:has-text("Add one by hand")');
     await p.fill('input[name=name]', name);
@@ -85,7 +88,9 @@ const base = 'http://localhost:3100';
   await p.locator('article.lead', { hasText: 'Sam Cole' }).locator('text=Asked not to be contacted').click();
   await p.waitForSelector('p.notice:has-text("do not contact")');
 
-  // Customer revenue: Sep confirmed $4,000, Oct $4,000 not confirmed
+  // Customer revenue: Sep confirmed $4,000, Oct $4,000 not confirmed (Settings page)
+  await p.goto(clientUrl + '/settings');
+  await p.waitForSelector('#customers-h');
   const cust = () => p.locator('section[aria-labelledby=customers-h] article.lead', { hasText: 'Dana Smith' });
   const enter = async (month, amount, confirm) => {
     await cust().locator('summary:has-text("Enter a month")').click();
@@ -145,7 +150,8 @@ const base = 'http://localhost:3100';
   await login(r, 'rep@example.test', 'reppassword1');
   await r.goto(base + '/money');
   if (r.url().includes('/money')) fail('team member reached money');
-  await r.goto(clientUrl);
+  await r.goto(clientUrl + '/settings');
+  await r.waitForSelector('#customers-h');
   const body = await r.textContent('main');
   if (body.includes('Our share') || body.includes('What they owe us') || body.includes('10% of')) fail('team member sees money');
   const rc = r.locator('section[aria-labelledby=customers-h] article.lead', { hasText: 'Dana Smith' });

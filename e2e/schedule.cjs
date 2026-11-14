@@ -52,7 +52,7 @@ async function deliver(raw) {
         first_step = 'free walkthrough', claim_url = 'https://libra.example/book' WHERE id = ${clientId}`);
 
   // 1. Connect the business's own mailbox
-  await p.goto(`${base}/clients/${clientId}`);
+  await p.goto(`${base}/clients/${clientId}/settings`);
   await p.waitForSelector('#mailbox-h');
   await p.click('summary:has-text("Advanced")');
   await p.selectOption('select[name=provider]', 'other');

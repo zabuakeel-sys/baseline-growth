@@ -127,7 +127,7 @@ export default async function SettingsPage({ params, searchParams }: {
           </label>
           <label>Minimum monthly price ($)<input name="pricing_minimum" inputMode="decimal" defaultValue={client.pricing?.minimumCents ? String(client.pricing.minimumCents / 100) : ''} /></label>
           <label>Range shown (+/- %)<input name="pricing_range" inputMode="decimal" defaultValue={client.pricing?.rangePercent ?? 10} /></label>
-          <div className="actions full"><button type="submit">Save</button></div>
+          <div className="actions full"><button type="submit">Save rep tools</button></div>
         </ActionForm>
       </section>
 

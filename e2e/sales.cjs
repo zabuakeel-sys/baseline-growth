@@ -33,7 +33,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   // LibraPro: 10% for 36 months from this month, a script, three prospects for Rita in two cities
   await o.goto(base + '/');
   await o.click('.biz-card:has-text("LibraPro Facility Services")');
-  await o.waitForSelector('h1');
+  await o.waitForURL(/\/clients\/\d+$/);
   const clientUrl = o.url().split('#')[0].split('?')[0];
   const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date()).slice(0, 7);
   await o.goto(clientUrl + '/settings');
@@ -111,8 +111,9 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   console.log('River:', psql("SELECT status || ' won_by=' || won_by FROM leads WHERE name = 'River Clinic'"));
   if (psql("SELECT won_by FROM leads WHERE name = 'River Clinic'") !== String(ritaId)) fail('customer should be credited to Rita');
 
-  // Owner confirms River Clinic paid LibraPro $4,000 this month
-  await o.goto(clientUrl);
+  // Owner confirms River Clinic paid LibraPro $4,000 this month (customers are on Settings now)
+  await o.goto(clientUrl + '/settings');
+  await o.waitForSelector('#customers-h');
   const rc = o.locator('section[aria-labelledby=customers-h] article.lead', { hasText: 'River Clinic' });
   await rc.locator('summary:has-text("Enter a month")').click();
   await rc.locator('input[name=month]').fill(month);
