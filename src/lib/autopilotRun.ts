@@ -6,6 +6,10 @@ import { addCandidates, runSearch } from './finderRun';
 import { placesConfigured } from './places';
 import { today } from './work';
 
+// After a failed search (bad key, API off, billing) wait before asking Google again.
+let searchPausedUntil = 0;
+const PAUSE_AFTER_FAILURE_MS = 30 * 60_000;
+
 export type AutopilotReport = { searches: number; added: number; notes: string[] };
 
 export async function runAutopilot(): Promise<AutopilotReport> {
@@ -31,7 +35,8 @@ export async function runAutopilot(): Promise<AutopilotReport> {
   const settings = (await query<{ max_searches_per_day: number }>('SELECT max_searches_per_day FROM outreach_settings WHERE id = 1')).rows[0];
   let searchesLeft = Math.max(0, settings.max_searches_per_day - Number((await query<{ n: string }>(
     `SELECT count(*) AS n FROM targets WHERE (last_run_at AT TIME ZONE 'America/Detroit')::date = (now() AT TIME ZONE 'America/Detroit')::date`)).rows[0].n));
-  const canSearch = placesConfigured();
+  const canSearch = placesConfigured() && Date.now() >= searchPausedUntil;
+  if (placesConfigured() && !canSearch) report.notes.push(`Search paused after a failure; retrying after ${new Date(searchPausedUntil).toISOString().slice(11, 16)} UTC`);
   const now = today();
 
   for (const client of clients) {
@@ -59,12 +64,14 @@ export async function runAutopilot(): Promise<AutopilotReport> {
       } catch (err) {
         report.notes.push(`${client.name}: search failed: ${(err as Error).message}`);
         console.error(`autopilot: ${client.name} search failed:`, (err as Error).message);
+        searchPausedUntil = Date.now() + PAUSE_AFTER_FAILURE_MS;
+        searchesLeft = 0; // the same key fails for every business; stop for this run
         break;
       }
       pool = await loadPool();
     }
     if (!pool.length) {
-      if (!canSearch) report.notes.push(`${client.name}: business search is not connected`);
+      if (!placesConfigured()) report.notes.push(`${client.name}: business search is not connected`);
       continue;
     }
     const take = pool.slice(0, want).map((c) => c.id);
@@ -72,7 +79,7 @@ export async function runAutopilot(): Promise<AutopilotReport> {
     report.added += added;
     want -= added;
   }
-  if (canSearch && searchesLeft <= 0) report.notes.push('Daily search limit reached');
+  if (canSearch && searchesLeft <= 0 && Date.now() >= searchPausedUntil) report.notes.push('Daily search limit reached');
   if (report.searches || report.added || report.notes.length) {
     console.log(`autopilot: ${report.searches} searches, ${report.added} added${report.notes.length ? ` | ${report.notes.join(' | ')}` : ''}`);
   }

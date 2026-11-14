@@ -12,8 +12,17 @@ export async function runSearch(targetId: number): Promise<{ found: number; adde
     'SELECT client_id, what, location, exclude, max_results FROM targets WHERE id = $1', [targetId])).rows[0];
   if (!t) throw new Error('That search no longer exists.');
   // Mark it run first, so a failure does not retry the same paid search on every pass.
-  await query('UPDATE targets SET last_run_at = now() WHERE id = $1', [targetId]);
-  const places = await searchPlaces(`${t.what} in ${t.location}`, t.max_results);
+  // Marked as run up front so two overlapping runs do not search the same place twice; a failed
+  // search puts it back, so it is retried and does not count against the daily limit.
+  const before = (await query<{ last_run_at: Date | null }>(
+    'UPDATE targets t SET last_run_at = now() FROM targets o WHERE t.id = $1 AND o.id = t.id RETURNING o.last_run_at', [targetId])).rows[0]?.last_run_at ?? null;
+  let places;
+  try {
+    places = await searchPlaces(`${t.what} in ${t.location}`, t.max_results);
+  } catch (err) {
+    await query('UPDATE targets SET last_run_at = $2 WHERE id = $1', [targetId, before]);
+    throw err;
+  }
   const exclude = parseExclude(t.exclude);
   const seen = new Set((await query<{ place_id: string }>('SELECT place_id FROM candidates WHERE client_id = $1', [t.client_id])).rows.map((r) => r.place_id));
   const knownPhones = new Set((await query<{ p: string }>(
