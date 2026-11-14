@@ -154,7 +154,7 @@ export type ReplyDraft = { reply: string; intent: keyof typeof INTENTS; source: 
 /** A reply for a person to approve. Falls back to a short template when AI is off or fails. */
 export async function draftReply(ctx: {
   leadName: string; theyWrote: string; clientName: string; offer: string; whyUs: string; firstStep: string;
-  claimUrl: string; script: string; pricing: string;
+  claimUrl: string; script: string; pricing: string; goal?: string;
 }): Promise<ReplyDraft> {
   const first = ctx.leadName.trim().split(/\s+/)[0] || 'there';
   const template = (): ReplyDraft => ({
@@ -179,6 +179,7 @@ export async function draftReply(ctx: {
           ctx.claimUrl && `Booking link: ${ctx.claimUrl}`,
           ctx.pricing && `Pricing facts:\n${ctx.pricing}`,
           ctx.script && `Client's sales script (for answers to common objections):\n${ctx.script.slice(0, 3000)}`,
+          ctx.goal && `The goal to move them toward: ${ctx.goal}`,
           `What the prospect wrote:\n${ctx.theyWrote.slice(0, 3000)}`,
         ].filter(Boolean).join('\n\n'),
       }],
@@ -242,6 +243,64 @@ export async function draftSignup(siteText: string, website: string): Promise<Si
     return { ...d, objections: d.objections.filter((o) => o.said.trim() && o.answer.trim()).slice(0, 3) };
   } catch (err) {
     console.error('sign-up draft failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The whole opening/follow-up email, written to sound like a real person wrote it to one specific
+// business. Grounded strictly in the facts given; the signature and opt-out are added after.
+
+const OUTREACH_EMAIL_SYSTEM = `You write a short cold outreach email on behalf of a client business, to one specific prospect who could benefit from what the client offers. A real person is sending it and stands behind it, so it must read like a thoughtful human wrote it to that one business, not like a marketing blast.
+
+Voice and style:
+- Warm, plain, direct, conversational. Short sentences. Sound like a person, not a company.
+- No buzzwords, no hype, no "I hope this email finds you well", no "I wanted to reach out", no exclamation marks, no emojis, no corporate filler.
+- Do not oversell. One clear, low-pressure ask.
+
+Hard rules:
+- Use ONLY the facts provided about the client and the prospect. Never invent features, prices, promises, numbers, guarantees, or claims.
+- If a specific true detail about this prospect is given, you may open with one natural sentence about it. If not, open plainly. Never pretend to know them.
+- The ask must match the client's "first step" exactly. If the first step is free or no-cost, say plainly that it is free / no cost. If a link is given, include it so they can act in one click.
+- Length 45 to 95 words. Start with "Hi <first name>,". Write the body only. Do NOT add a signature, sign-off, name, or opt-out line (those are added automatically).
+- "touch" tells you which message this is. Touch 0 is the first contact: introduce briefly and make the ask. Touches 1+ are follow-ups to someone who has not replied: keep it very short, friendly, no guilt, restate the simple ask (and that it is free, if it is).`;
+
+const OutreachEmail = z.object({ body: z.string() });
+
+export async function writeOutreachEmail(ctx: {
+  leadName: string; about: string; need: string; city: string; rating: number | null; reviews: number | null;
+  clientName: string; offer: string; whyUs: string; firstStep: string; claimUrl: string; goal: string; touch: number;
+}): Promise<string | null> {
+  if (!coachConfigured()) return null;
+  try {
+    const response = await getClient().messages.parse({
+      model: 'claude-opus-5-5',
+      max_tokens: 1500,
+      output_config: { effort: 'low', format: zodOutputFormat(OutreachEmail) },
+      system: OUTREACH_EMAIL_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: [
+          `This is message number ${ctx.touch} (0 = first contact).`,
+          `Prospect: ${ctx.leadName}${ctx.city ? ` in ${ctx.city}` : ''}`,
+          ctx.about && `What we found about them:\n${ctx.about.slice(0, 1500)}`,
+          ctx.need && `What they may need: ${ctx.need}`,
+          ctx.rating != null && `Google rating: ${ctx.rating} from ${ctx.reviews ?? 0} reviews`,
+          `Sending on behalf of: ${ctx.clientName}`,
+          `What ${ctx.clientName} offers: ${ctx.offer || '(not given)'}`,
+          ctx.whyUs && `Why people choose ${ctx.clientName}:\n${ctx.whyUs}`,
+          ctx.goal && `THE GOAL to drive toward in this email (most important, overrides the generic first step if they differ):\n${ctx.goal}`,
+          `The one thing to ask them to do (the first step): ${ctx.firstStep || 'a quick reply to learn more'}`,
+          ctx.claimUrl && `Link for that first step: ${ctx.claimUrl}`,
+        ].filter(Boolean).join('\n\n'),
+      }],
+    });
+    if (response.stop_reason === 'refusal' || !response.parsed_output?.body.trim()) return null;
+    let body = response.parsed_output.body.trim();
+    if (!/^Hi\b/i.test(body)) body = `Hi ${ctx.leadName.trim().split(/\s+/)[0] || 'there'},\n\n${body}`;
+    return body;
+  } catch (err) {
+    console.error('outreach email failed:', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err);
     return null;
   }
 }

@@ -47,7 +47,7 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   answers.objections = objections;
   const fields = {
     name: get('name'), website: get('website'), contact_name: get('contact_name'), contact_email: get('contact_email'),
-    contact_phone: get('contact_phone'), offer: get('offer').replace(/\s+/g, ' '), why_us: get('why_us'), first_step: get('first_step'),
+    contact_phone: get('contact_phone'), offer: get('offer').replace(/\s+/g, ' '), goal: get('goal'), why_us: get('why_us'), first_step: get('first_step'),
     claim_url: get('claim_url'), claim_label: get('first_step') ? `Book your ${get('first_step').toLowerCase().replace(/^(a|an|the)\s+/, '')}` : '',
     visits: get('visits') === 'yes', logo_url: get('logo_url'),
     customer_value_cents: value, mailing_address: get('mailing_address'),

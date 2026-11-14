@@ -94,7 +94,9 @@ async function deliver(raw) {
   if (!lead('Rae Reed', 'next_action').startsWith('Visit: drop in')) fail('Rae should have a visit due (client does visits)');
   if (lead('Sam Stone', "cadence_step || '/' || steps_missed") !== '2/1') fail('Sam: missed call should be skipped');
   const patBody = psql("SELECT body FROM outbox o JOIN leads l ON l.id = o.lead_id WHERE l.name = 'Pat Park'");
-  if (!patBody.includes('Hi Pat,\n\nSaw that your clinic in Troy has a 4.8 rating from 120 reviews. I\'m reaching out on behalf of')) fail('AI first line missing from Pat email');
+  // The opening email is AI-written (the mock echoes the client's offer) and carries the signature.
+  if (!patBody.includes('LibraPro cleans offices and medical buildings across Metro Detroit')) fail('AI email should carry the client offer');
+  if (!patBody.includes('On behalf of LibraPro Facility Services')) fail('AI email should keep the signature and opt-out');
   if (psql("SELECT o.kind || ' ' || o.step || ' ' || o.client_id FROM outbox o JOIN leads l ON l.id = o.lead_id WHERE l.name = 'Sam Stone'") !== `sequence 2 ${clientId}`) fail('Sam email should be step 2');
 
   // Calls and visits are on Today

@@ -10,7 +10,7 @@ import { CADENCE, currentStep, emailNumber, isMissed, isScheduleLabel, stepLabel
 import { toHtml } from './emailhtml';
 import { addressOf, classifyReply, inSendWindow, remainingToday } from './mailrules';
 import { type MailAccount, allClientAccounts, clientAccount, fetchUnread, outreachAccount, sendMail, sharedAccount } from './mail';
-import { draftReply, personalLine } from './coach';
+import { draftReply, writeOutreachEmail } from './coach';
 import { cityOf } from './leads';
 import { today } from './work';
 import { runAutopilot } from './autopilotRun';
@@ -31,6 +31,7 @@ type DueLead = {
   id: number; email: string; phone: string; address: string; name: string; need: string; notes: string; rating: number | null; reviews: number | null;
   received_on: string; touches_sent: number; status: string; cadence_step: number; next_action_on: string | null; next_action: string;
   client_id: number; client_name: string; offer: string; mailing_address: string; visits: boolean; approved: boolean;
+  goal: string; why_us: string; first_step: string; claim_url: string;
 };
 
 /**
@@ -40,7 +41,7 @@ type DueLead = {
 async function queueDue(settings: Settings) {
   const leads = (await query<DueLead>(
     `SELECT l.id, l.email, l.phone, l.address, l.name, l.need, l.notes, l.rating, l.reviews, l.received_on, l.touches_sent, l.status,
-        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits,
+        l.cadence_step, l.next_action_on, l.next_action, l.client_id, c.name AS client_name, c.offer, c.mailing_address, c.visits, c.goal, c.why_us, c.first_step, c.claim_url,
         c.outreach_approved_at IS NOT NULL AS approved
       FROM leads l JOIN clients c ON c.id = l.client_id
       WHERE l.status IN ('new', 'following_up') AND l.cadence_step < $1 AND c.status <> 'ended'`, [CADENCE.length])).rows;
@@ -68,13 +69,15 @@ async function queueDue(settings: Settings) {
         const first = l.touches_sent > 0
           ? (await query<{ message_id: string }>("SELECT message_id FROM outbox WHERE lead_id = $1 AND touch = 0 AND status = 'sent'", [l.id])).rows[0]
           : undefined;
-        const personal = l.touches_sent === 0
-          ? await personalLine({ name: l.name, about: l.notes, need: l.need, rating: l.rating, reviews: l.reviews, city: cityOf(l.address), clientName: l.client_name, offer: l.offer })
-          : null;
-        const body = messageFor(l.touches_sent, {
-          leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName: account.senderName ?? nameOf(account.from), address: l.mailing_address,
-          personal: personal || undefined,
+        const senderName = account.senderName ?? nameOf(account.from);
+        // A real, human email written per prospect when AI is on; the fixed template otherwise.
+        const written = await writeOutreachEmail({
+          leadName: l.name, about: l.notes, need: l.need, city: cityOf(l.address), rating: l.rating, reviews: l.reviews,
+          clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step, claimUrl: l.claim_url, goal: l.goal, touch: l.touches_sent,
         });
+        const body = written
+          ? written + signOff({ clientName: l.client_name, senderName, address: l.mailing_address })
+          : messageFor(l.touches_sent, { leadName: l.name, clientName: l.client_name, offer: l.offer, need: l.need, senderName, address: l.mailing_address });
         const r = await query(
           `INSERT INTO outbox (lead_id, client_id, kind, step, touch, to_email, subject, body, status, in_reply_to, approved_at)
            VALUES ($1, $2, 'sequence', $3, $4, $5, $6, $7, $8, $9, CASE WHEN $8 = 'approved' THEN now() END)
@@ -239,8 +242,8 @@ const said = (text: string) => text.split(/\n\s*On .+wrote:|\n>/)[0].trim();
 async function createReplyDraft(leadId: number, replyId: number, m: { messageId: string; subject: string; text: string; from: string }, account: MailAccount) {
   const l = (await query<{
     name: string; email: string; client_id: number; client_name: string; offer: string; why_us: string; first_step: string; claim_url: string;
-    call_script: string; pricing: unknown; mailing_address: string;
-  }>(`SELECT l.name, l.email, c.id AS client_id, c.name AS client_name, c.offer, c.why_us, c.first_step, c.claim_url, c.call_script, c.pricing, c.mailing_address
+    call_script: string; pricing: unknown; mailing_address: string; goal: string;
+  }>(`SELECT l.name, l.email, c.id AS client_id, c.name AS client_name, c.offer, c.why_us, c.first_step, c.claim_url, c.call_script, c.pricing, c.mailing_address, c.goal
       FROM leads l JOIN clients c ON c.id = l.client_id WHERE l.id = $1`, [leadId])).rows[0];
   if (!l) return;
   const pricing = l.pricing && typeof l.pricing === 'object' && Array.isArray((l.pricing as { types?: unknown[] }).types)
@@ -248,7 +251,7 @@ async function createReplyDraft(leadId: number, replyId: number, m: { messageId:
     : '';
   const draft = await draftReply({
     leadName: l.name, theyWrote: said(m.text), clientName: l.client_name, offer: l.offer, whyUs: l.why_us, firstStep: l.first_step,
-    claimUrl: l.claim_url, script: l.call_script, pricing,
+    claimUrl: l.claim_url, script: l.call_script, pricing, goal: l.goal,
   });
   const body = draft.reply + signOff({ clientName: l.client_name, senderName: account.senderName ?? nameOf(account.from), address: l.mailing_address });
   const subject = /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject || `Quick question from ${l.client_name}`}`;

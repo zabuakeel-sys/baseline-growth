@@ -3,7 +3,8 @@ import { query } from './db';
 import type { Client } from './clients';
 import { missingAnswers } from './onboarding';
 import { sharedAccount } from './mail';
-import { messageFor } from './followup';
+import { messageFor, signOff } from './followup';
+import { writeOutreachEmail } from './coach';
 
 export type SetupStep = { key: 'answers' | 'mailbox' | 'approve' | 'live'; label: string; done: boolean; href: string; action: string };
 
@@ -23,15 +24,22 @@ export async function setupSteps(c: Client): Promise<SetupStep[]> {
   ];
 }
 
-/** The email to approve: the first one actually queued for this business, or a sample built the same way. */
+/** The email to approve: the first one actually queued for this business, or an AI-written sample. */
 export async function sampleFirstEmail(c: Client) {
   const queued = (await query<{ subject: string; body: string; lead_name: string }>(
     `SELECT o.subject, o.body, l.name AS lead_name FROM outbox o JOIN leads l ON l.id = o.lead_id
      WHERE o.client_id = $1 AND o.kind = 'sequence' AND o.touch = 0 AND o.status IN ('pending', 'approved', 'sent') ORDER BY o.id LIMIT 1`, [c.id])).rows[0];
   if (queued) return { ...queued, real: true };
   const sender = (await query<{ from_name: string }>('SELECT from_name FROM client_mailboxes WHERE client_id = $1', [c.id])).rows[0]?.from_name ?? '';
+  // Show what the live emails actually look like: AI-written toward the goal, when AI is connected.
+  const written = await writeOutreachEmail({
+    leadName: 'Pat Example', about: '', need: '', city: '', rating: null, reviews: null,
+    clientName: c.name, offer: c.offer, whyUs: c.why_us, firstStep: c.first_step, claimUrl: c.claim_url, goal: c.goal, touch: 0,
+  });
   return {
     subject: `Quick question from ${c.name}`, lead_name: 'Pat Example', real: false,
-    body: messageFor(0, { leadName: 'Pat Example', clientName: c.name, offer: c.offer, senderName: sender, address: c.mailing_address }),
+    body: written
+      ? written + signOff({ clientName: c.name, senderName: sender, address: c.mailing_address })
+      : messageFor(0, { leadName: 'Pat Example', clientName: c.name, offer: c.offer, senderName: sender, address: c.mailing_address }),
   };
 }
