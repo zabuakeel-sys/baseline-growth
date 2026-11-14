@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { leadsForDay, referralAsksDue } from '@/lib/leads';
 import { nextQueue, reasonFor } from '@/lib/queue';
-import { brief, goalProgress, routeLink, streak } from '@/lib/playbook';
+import { routeLink, streak } from '@/lib/playbook';
 import { cityOf } from '@/lib/leads';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
@@ -73,9 +73,7 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
   const goals = { calls: me?.goal_calls ?? 0, visits: me?.goal_visits ?? 0, meetings: me?.goal_meetings ?? 0 };
   const days = Object.fromEntries(history.map((h) => [h.day.slice(0, 10), h]));
   const todayCounts = days[now] ?? { calls: 0, visits: 0, meetings: 0 };
-  const progress = goalProgress(todayCounts, goals);
   const run = streak(days, goals, now);
-  const hasGoals = !everyone && goals.calls + goals.visits + goals.meetings > 0;
   // Referral asks come after replies and due follow-ups, before cold new prospects: a happy new
   // customer is the warmest source of the next one.
   const skippedAsks = skipask.split(',').filter((x) => /^\d+$/.test(x)).map(Number);
@@ -96,69 +94,57 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
   const directions = lead?.address ? routeLink([lead.address]) : null;
   const opening = lead?.client_script?.split('\n').find((l) => /^Opening:/.test(l))?.replace(/^Opening:\s*/, '');
 
+  // Progress strip: a calls goal if one is set, otherwise plain "done today".
+  const goalCalls = goals.calls;
+  const stripBig = goalCalls > 0
+    ? <>{todayCounts.calls} <span>/ {goalCalls} calls</span></>
+    : <>{done} <span>done today</span></>;
+  const stripW = goalCalls > 0 ? Math.min((todayCounts.calls / goalCalls) * 100, 100) : pct;
+  const stripMeta = goalCalls > 0 ? `${Math.max(goalCalls - todayCounts.calls, 0)} to go today` : `${toGo} lined up`;
+  const dotColor = (r: string) => ({ replied: 'var(--bad)', call: 'var(--accent)', visit: 'var(--warn)', new: 'var(--good)' }[r] ?? 'var(--muted)');
+  const ocls = (v: string) => (v === 'signed' ? 'win' : v === 'not_interested' || v === 'wrong_number' ? 'ghost' : '');
+  const facts: [string, string][] = [];
+  if (lead) {
+    facts.push(['Emails', `${lead.touches_sent ?? 0} sent`]);
+    if (cityOf(lead.address)) facts.push(['Where', cityOf(lead.address)]);
+    if (everyone && lead.assignee_name) facts.push(['Rep', lead.assignee_name]);
+  }
+  const CallIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 5c0 8 7 15 15 15 1 0 2-1 2-2v-2l-4-2-2 2c-3-1-6-4-7-7l2-2-2-4H6C5 3 4 4 4 5z" /></svg>;
+
   return (
     <div className="next-up">
-      <div className="next-top">
+      <div className="page-head">
         <div>
-          <h1 style={{ margin: 0 }}>{clientId ? clientName : 'Next up'}</h1>
-          <p className="muted" style={{ margin: '2px 0 0' }}>
-            {done} done today · {toGo} to go
-            {clientId && <> · <Link href={`/clients/${clientId}`}>Back to {clientName}</Link></>}
-          </p>
+          <h1>{clientId ? clientName : 'Today'}</h1>
+          <p className="sub">{done} done today · {toGo} to go{clientId && <> · <Link href={`/clients/${clientId}`}>back to {clientName}</Link></>}</p>
         </div>
         {isOwner && !clientId && (
-          <div className="segmented">
-            <Link href="/next" className={everyone ? '' : 'on'}>Mine</Link>
-            <Link href="/next?who=all" className={everyone ? 'on' : ''}>Everyone</Link>
+          <div className="right segmented">
+            <Link href="/next" aria-current={everyone ? undefined : 'page'}>Mine</Link>
+            <Link href="/next?who=all" aria-current={everyone ? 'page' : undefined}>Everyone</Link>
           </div>
         )}
       </div>
-      {hasGoals ? (
-        <div className="goals" aria-label="Today's goals" style={{ marginTop: 12 }}>
-          {([['calls', 'Calls'], ['visits', 'Visits'], ['meetings', 'Meetings booked']] as const).filter(([k]) => goals[k] > 0).map(([k, label]) => (
-            <div key={k} className={`goal${(progress[k] ?? 0) >= 100 ? ' met' : ''}`}>
-              <div className="label">{label}: <strong>{todayCounts[k]}</strong> of {goals[k]}</div>
-              <div className="bar"><div style={{ width: `${progress[k] ?? 0}%` }} /></div>
-            </div>
-          ))}
-          <div className="goal"><div className="label">Streak</div><strong style={{ fontSize: 20 }}>{run} day{run === 1 ? '' : 's'}</strong></div>
-        </div>
-      ) : (
-        <div className="progress" aria-label={`${pct}% of today done`}><div style={{ width: `${pct}%` }} /></div>
-      )}
+      <div className="strip">
+        <div className="big">{stripBig}</div>
+        <div className="pbar"><i style={{ width: `${stripW}%` }} /></div>
+        <div className="meta">{stripMeta}</div>
+        {run > 0 && <span className="pill-ok">{run}-day streak</span>}
+      </div>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
-      {!clientId && meetings.length > 0 && (
-        <div className="card meetings-today">
-          <strong>Meetings</strong>
-          <ul className="plain-list">
-            {meetings.map((m) => (
-              <li key={m.id} style={{ padding: '4px 0' }}>{time(m.starts_at)} · {m.kind} with <strong>{m.lead_name}</strong> ({m.client_name}){m.location ? ` · ${m.location}` : ''}
-                {m.phone && <> · <a href={`tel:${m.phone.replace(/[^\d+]/g, '')}`}>{m.phone}</a></>}
-                {new Date(m.starts_at) < new Date() && (
-                  <span className="actions inline-actions">
-                    <span className="muted">How did it go?</span>
-                    <form action={setMeetingStatus.bind(null, m.id, 'held', back)}><button type="submit" className="small">Held</button></form>
-                    <form action={setMeetingStatus.bind(null, m.id, 'no_show', back)}><button type="submit" className="secondary small">No-show</button></form>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {ask ? (
-        <article className="card up-card" aria-labelledby="up-name">
-          <div className="up-head">
-            <span className="pill signed">Ask for referrals</span>
-            {toGo > 1 && <Link href={skipAskHref} className="muted small-link">Skip for now</Link>}
+        <article className="focus" aria-labelledby="up-name">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="r-tag r-new"><span className="d"></span>Ask for referrals</span>
+            {toGo > 1 && <Link href={skipAskHref} className="muted" style={{ fontSize: 13 }}>Skip for now</Link>}
           </div>
-          <h2 id="up-name" className="up-name">{ask.name}</h2>
-          <p className="muted" style={{ margin: 0 }}>New customer of <strong>{ask.client_name}</strong> since {ask.customer_since}</p>
-          <p className="up-why">Happy new customers know others like them. Ask for two names while the win is fresh.</p>
-          {ask.phone && <div className="big-actions"><a className="button big" href={`tel:${ask.phone.replace(/[^\d+]/g, '')}`}>Call {ask.phone}</a></div>}
-          <p className="script-line">&ldquo;Glad it is going well. Who else do you know who could use {ask.client_name}? I&apos;ll mention you sent me.&rdquo;</p>
+          <div className="who" id="up-name">{ask.name}</div>
+          <p className="muted" style={{ margin: '2px 0 0' }}>New customer of <strong>{ask.client_name}</strong> since {ask.customer_since}</p>
+          {ask.phone && <div className="callrow"><a className="call" href={`tel:${ask.phone.replace(/[^\d+]/g, '')}`}><CallIcon /> Call {ask.phone}</a></div>}
+          <div className="opener"><div className="q">Say this</div><p>&ldquo;Glad it is going well. Who else do you know who could use {ask.client_name}? I&apos;ll mention you sent me.&rdquo;</p></div>
+          <div className="divline"></div>
+          <div className="ol">Add the names they give you.</div>
           <ActionForm className="grid" action={addReferrals.bind(null, ask.id, back)}>
             {[1, 2].map((i) => (
               <div key={i} className="full grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
@@ -167,88 +153,97 @@ export default async function NextUp({ searchParams }: { searchParams: Promise<{
                 <label>Email<input name={`email${i}`} type="email" /></label>
               </div>
             ))}
-            <div className="outcome-buttons full">
-              <button type="submit">Save referrals</button>
-              <button type="submit" className="secondary" formNoValidate>They had no one</button>
-            </div>
+            <div className="actions full"><button type="submit">Save referrals</button><button type="submit" className="secondary" formNoValidate>They had no one</button></div>
           </ActionForm>
         </article>
       ) : !lead ? (
-        <div className="card done-card">
-          <h2>You are done for now</h2>
-          <p className="muted" style={{ margin: 0 }}>
-            Nobody is due{clientId ? ` for ${clientName}` : ''}. New prospects are added every morning and follow-ups come back on their day.
-            {clientId ? <> <Link href={`/clients/${clientId}`}>Back to {clientName}</Link>.</> : isOwner && <> Check <Link href="/">Home</Link> for anything waiting on you.</>}
+        <div className="done-card">
+          <div className="ck">✓</div>
+          <h2>You are clear for today</h2>
+          <p>Nobody is due{clientId ? ` for ${clientName}` : ''}. New prospects are added every morning, and follow-ups come back on their day. Emails keep going out on their own.</p>
+          <p style={{ marginTop: 16 }}>
+            {clientId ? <Link className="button secondary" href={`/clients/${clientId}`}>Back to {clientName}</Link> : isOwner && <Link className="button secondary" href="/">Back to Overview</Link>}
           </p>
         </div>
       ) : (
-        <article className="card up-card" aria-labelledby="up-name">
-          <div className="up-head">
-            <span className={`pill reason-${reason}`}>{REASON[reason!].label}</span>
-            {queue.length > 1 && <Link href={skipHref} className="muted small-link">Skip for now</Link>}
-          </div>
-          <h2 id="up-name" className="up-name">{lead.name}</h2>
-          <p className="muted" style={{ margin: 0 }}>
-            For <strong>{lead.client_name}</strong>{cityOf(lead.address) ? ` · ${cityOf(lead.address)}` : ''}
-            {lead.assignee_name && everyone ? ` · ${lead.assignee_name}` : ''}
-          </p>
-          <p className="up-why">{reason === 'replied' || reason === 'new' || reason === 'visit' ? REASON[reason].hint : lead.next_action || 'Follow up'}</p>
-
-          <div className="big-actions">
-            {tel && <a className="button big" href={tel}>Call {lead.phone}</a>}
-            {reason === 'visit' && directions && <a className="button big secondary" href={directions} target="_blank" rel="noreferrer">Directions</a>}
-            <Link className="button big secondary" href={`/call/${lead.id}?from=next`}>Listen and coach me</Link>
-          </div>
-
-          {lead.last_reply && lead.last_reply_kind === 'reply' && (
-            <blockquote className="reply-text"><span className="task-meta">They wrote: </span>{lead.last_reply.split(/\n\s*On .+wrote:|\n>/)[0].trim().slice(0, 600)}</blockquote>
-          )}
-          {opening && <p className="script-line">&ldquo;{opening.replace('[your name]', user.name.split(' ')[0])}&rdquo;</p>}
-          <ul className="brief" aria-label="What we know">
-            {brief(lead as unknown as Record<string, unknown>).map((l, i) => <li key={i}>{l}</li>)}
-          </ul>
-          {lead.client_script && (
-            <details><summary>Full script and answers to objections</summary><pre className="message">{lead.client_script}</pre></details>
-          )}
-
-          <h3 className="what-happened">What happened?</h3>
-          <ActionForm className="outcome-form" action={logActivity.bind(null, lead.id, back)}>
-            <input type="hidden" name="channel" value={channel} />
-            <input name="notes" placeholder="Notes (optional): who you spoke to, what they said" aria-label="Notes" />
-            <div className="outcome-buttons">
-              {BUTTONS.map(([value, label, cls]) => (
-                <button key={value} type="submit" name="outcome" value={value} className={cls}>{label}</button>
-              ))}
+        <div className="work">
+          <article className="focus" aria-labelledby="up-name">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className={`r-tag r-${reason}`}><span className="d"></span>{REASON[reason!].label}</span>
+              {queue.length > 1 && <Link href={skipHref} className="muted" style={{ fontSize: 13 }}>Skip</Link>}
             </div>
-          </ActionForm>
-          <details className="book">
-            <summary><strong>Booked a meeting</strong></summary>
-            <ActionForm className="grid" action={bookFromQueue.bind(null, lead.id, back, channel)}>
-              <label>What
-                <select name="kind" defaultValue="Walkthrough">
-                  <option>Walkthrough</option><option>Call</option><option>Visit</option><option>Demo</option><option>Sign-up</option>
-                </select>
-              </label>
-              <label>Day<input name="date" type="date" min={now} defaultValue={now} required /></label>
-              <label>Time (Michigan)<input name="time" type="time" required /></label>
-              <label>Where<input name="location" placeholder="Their office, phone, video" /></label>
-              <div className="actions full"><button type="submit">Save meeting</button></div>
+            <div className="who" id="up-name">{lead.name} <span className="co">· {lead.client_name}</span></div>
+            {facts.length > 0 && <div className="facts">{facts.map(([k, v], i) => <span key={i}>{k} <b>{v}</b></span>)}</div>}
+            {lead.last_reply && lead.last_reply_kind === 'reply' && (
+              <div className="opener" style={{ borderLeftColor: 'var(--bad)' }}><div className="q">They wrote</div><p>{lead.last_reply.split(/\n\s*On .+wrote:|\n>/)[0].trim().slice(0, 400)}</p></div>
+            )}
+            {opening && <div className="opener"><div className="q">Suggested opener</div><p>{opening.replace('[your name]', user.name.split(' ')[0])}</p></div>}
+            <div className="callrow">
+              {tel && <a className="call" href={tel}><CallIcon /> Call {lead.phone}</a>}
+              {reason === 'visit' && directions && <a className="button secondary" href={directions} target="_blank" rel="noreferrer">Directions</a>}
+              <Link className="button secondary" href={`/call/${lead.id}?from=next`}>Listen and coach me</Link>
+            </div>
+            <div className="divline"></div>
+            <div className="ol">Log what happened — the next one comes right up.</div>
+            <ActionForm className="outcome-form" action={logActivity.bind(null, lead.id, back)}>
+              <input type="hidden" name="channel" value={channel} />
+              <input name="notes" placeholder="Notes (optional): who you spoke to, what they said" aria-label="Notes" style={{ marginBottom: 10 }} />
+              <div className="outc">
+                {BUTTONS.map(([value, label]) => (
+                  <button key={value} type="submit" name="outcome" value={value} className={ocls(value)}>{label}</button>
+                ))}
+              </div>
             </ActionForm>
-          </details>
-          {lead.activity.length > 0 && (
+            <details className="book" style={{ marginTop: 16 }}>
+              <summary><strong>Booked a meeting</strong></summary>
+              <ActionForm className="grid" action={bookFromQueue.bind(null, lead.id, back, channel)}>
+                <label>What
+                  <select name="kind" defaultValue="Walkthrough">
+                    <option>Walkthrough</option><option>Call</option><option>Visit</option><option>Demo</option><option>Sign-up</option>
+                  </select>
+                </label>
+                <label>Day<input name="date" type="date" min={now} defaultValue={now} required /></label>
+                <label>Time (Michigan)<input name="time" type="time" required /></label>
+                <label>Where<input name="location" placeholder="Their office, phone, video" /></label>
+                <div className="actions full"><button type="submit">Save meeting</button></div>
+              </ActionForm>
+            </details>
+            {lead.client_script && (
+              <details style={{ marginTop: 10 }}><summary className="muted">Full script and answers to objections</summary><pre className="message">{lead.client_script}</pre></details>
+            )}
             <p className="task-meta" style={{ marginTop: 12 }}>
-              Last time: {lead.activity[0].channel} · {lead.activity[0].outcome.replace(/_/g, ' ')}{lead.activity[0].notes ? ` · "${lead.activity[0].notes}"` : ''}
+              {lead.activity.length > 0 && <>Last: {lead.activity[0].channel} · {lead.activity[0].outcome.replace(/_/g, ' ')} · </>}
+              <Link href={`/clients/${lead.client_id}/prospects`}>Full record</Link>
             </p>
-          )}
-          <p className="task-meta" style={{ marginTop: 8 }}>
-            <Link href={`/clients/${lead.client_id}#leads-h`}>Full record</Link>
-          </p>
-        </article>
-      )}
-      {queue.length > 1 && (
-        <p className="muted" style={{ fontSize: 14 }}>
-          After this: {queue.slice(1, 4).map((l) => l.name).join(', ')}{queue.length > 4 ? ` and ${queue.length - 4} more` : ''}.
-        </p>
+          </article>
+
+          <aside className="upnext">
+            <h3>Up next</h3>
+            {queue.length <= 1 ? <div className="qrow"><span className="muted" style={{ fontSize: 13 }}>Last one — then you are clear.</span></div> : (
+              queue.slice(1, 8).map((l) => {
+                const r = reasonFor(l, now);
+                return <div className="qrow" key={l.id}><span className="d" style={{ background: dotColor(r) }}></span><span className="nm">{l.name}</span><span className="co">{l.client_name}</span></div>;
+              })
+            )}
+            {queue.length > 8 && <div className="qrow"><span className="muted" style={{ fontSize: 13 }}>+{queue.length - 8} more</span></div>}
+            {!clientId && meetings.length > 0 && (
+              <>
+                <h3 style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line-2)' }}>Meetings today</h3>
+                {meetings.map((m) => (
+                  <div className="qrow" key={m.id} style={{ flexWrap: 'wrap' }}>
+                    <span className="nm">{time(m.starts_at)} · {m.lead_name}</span>
+                    {new Date(m.starts_at) < new Date() && (
+                      <span className="actions" style={{ gap: 6, marginLeft: 'auto' }}>
+                        <form action={setMeetingStatus.bind(null, m.id, 'held', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0, fontSize: 12 }}>Held</button></form>
+                        <form action={setMeetingStatus.bind(null, m.id, 'no_show', back)}><button type="submit" className="secondary" style={{ padding: '4px 10px', minHeight: 0, fontSize: 12 }}>No-show</button></form>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </aside>
+        </div>
       )}
     </div>
   );

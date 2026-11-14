@@ -1,108 +1,108 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { listClients } from '@/lib/clients';
 import { query } from '@/lib/db';
-import { getPlay } from '@/lib/plays';
 import { setupSteps } from '@/lib/setup';
+import { today } from '@/lib/work';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Home is the list of businesses. Each card shows where the business is (setting up, live, paused),
- * its live numbers, and the one thing that needs doing next. Open a business to run everything for it.
- * Reps see only the businesses they are on.
- */
-export default async function Home({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
+/** The owner's Overview: the week's pulse, what needs them, and each business's health. Reps go to Today. */
+export default async function Overview({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const user = await requireUser();
-  const isOwner = user.role === 'owner';
+  if (user.role !== 'owner') redirect('/next');
   const { saved } = await searchParams;
+  const now = today();
 
-  let clients = (await listClients()).filter((c) => c.status !== 'ended');
-  // A rep sees only businesses they have prospects on.
-  if (!isOwner) {
-    const mine = new Set((await query<{ client_id: number }>(
-      'SELECT DISTINCT client_id FROM leads WHERE assignee_id = $1', [user.id])).rows.map((r) => r.client_id));
-    clients = clients.filter((c) => mine.has(c.id));
-  }
+  const [week, prior, drafts, failedRow, clients, spark] = await Promise.all([
+    query<{ emails: number; replies: number; customers: number; inplay: number }>(
+      `SELECT (SELECT count(*)::int FROM outbox WHERE status='sent' AND kind='sequence' AND sent_at > now()-interval '7 days') AS emails,
+              (SELECT count(*)::int FROM replies WHERE kind='reply' AND received_at > now()-interval '7 days') AS replies,
+              (SELECT count(*)::int FROM leads WHERE status='won' AND customer_since > $1::date - 7) AS customers,
+              (SELECT count(*)::int FROM leads WHERE status IN ('new','following_up','talking')) AS inplay`, [now]).then((r) => r.rows[0]),
+    query<{ emails: number }>(
+      `SELECT count(*)::int AS emails FROM outbox WHERE status='sent' AND kind='sequence' AND sent_at > now()-interval '14 days' AND sent_at <= now()-interval '7 days'`).then((r) => r.rows[0]),
+    query<{ id: number; lead: string; client: string }>(
+      `SELECT o.id, l.name AS lead, c.name AS client FROM outbox o JOIN leads l ON l.id=o.lead_id JOIN clients c ON c.id=l.client_id
+       WHERE o.kind='reply' AND o.status='pending' ORDER BY o.created_at LIMIT 6`).then((r) => r.rows),
+    query<{ n: number }>("SELECT count(*)::int AS n FROM outbox WHERE status='failed'").then((r) => r.rows[0]),
+    listClients().then((rows) => rows.filter((c) => c.status !== 'ended')),
+    query<{ n: number }>(
+      `SELECT count(o.id)::int AS n FROM generate_series(0,7) g
+       LEFT JOIN outbox o ON o.status='sent' AND o.sent_at >= now()-((g+1)||' weeks')::interval AND o.sent_at < now()-(g||' weeks')::interval
+       GROUP BY g ORDER BY g DESC`).then((r) => r.rows.map((x) => x.n)),
+  ]);
 
-  // Per-business: how many replies are drafted and waiting (owner handles these).
-  const draftCounts = isOwner
-    ? Object.fromEntries((await query<{ client_id: number; n: number }>(
-        `SELECT l.client_id, count(*)::int AS n FROM outbox o JOIN leads l ON l.id = o.lead_id
-         WHERE o.kind = 'reply' AND o.status = 'pending' GROUP BY l.client_id`).then((r) => r.rows)).map((r) => [r.client_id, r.n]))
-    : {};
-  const failed = isOwner ? (await query<{ n: number }>("SELECT count(*)::int AS n FROM outbox WHERE status = 'failed'")).rows[0].n : 0;
-
-  // The next setup step per business (owner only), so the card can show "finish setup".
-  const nextStep = new Map<number, string>();
-  if (isOwner) {
-    for (const c of clients) {
-      const steps = await setupSteps(c);
-      const next = steps.find((s) => !s.done && s.key !== 'live');
-      if (next) nextStep.set(c.id, next.key === 'approve' ? 'Review and approve the first email' : next.action);
+  // What needs the owner, in order.
+  type Need = { icon: 'hot' | 'mail'; a: string; b: string; href: string; cta: string; sec?: boolean };
+  const needs: Need[] = [];
+  for (const d of drafts) needs.push({ icon: 'hot', a: `${d.lead} replied`, b: `${d.client} · reply drafted, ready to send`, href: '/outbox#drafts-h', cta: 'Approve reply' });
+  const health = new Map<number, 'ok' | 'warn'>();
+  for (const c of clients) {
+    const steps = await setupSteps(c);
+    const next = steps.find((s) => !s.done && s.key !== 'live');
+    if (next) {
+      health.set(c.id, 'warn');
+      needs.push({ icon: 'mail', a: `${c.name} — ${next.key === 'approve' ? 'approve the first email' : next.action.toLowerCase()}`, b: next.key === 'approve' ? 'Ready to start sending' : 'Finish setting up', href: next.key === 'approve' ? `/clients/${c.id}/settings#approve-h` : next.href, cta: 'Open', sec: true });
+    } else {
+      health.set(c.id, c.outreach_approved_at ? 'ok' : 'warn');
     }
   }
+  if (failedRow.n > 0) needs.push({ icon: 'mail', a: `${failedRow.n} email${failedRow.n === 1 ? '' : 's'} failed to send`, b: 'Usually a mailbox password or limit', href: '/outbox', cta: 'See why', sec: true });
 
-  const statusPill = (c: (typeof clients)[number]) => {
-    if (c.status === 'paused') return <span className="pill">Paused</span>;
-    if (isOwner && nextStep.has(c.id)) return <span className="pill missing">Setting up</span>;
-    if (!c.outreach_approved_at) return <span className="pill missing">Setting up</span>;
-    return <span className="pill signed">Live</span>;
-  };
+  const max = Math.max(...spark, 1);
+  const pts = spark.map((n, i) => `${(i / (spark.length - 1)) * 120},${26 - (n / max) * 22}`).join(' ');
+  const delta = week.emails - prior.emails;
 
   return (
     <>
-      <div className="next-top">
-        <h1 style={{ margin: 0 }}>{isOwner ? 'Your businesses' : 'My businesses'}</h1>
-        {isOwner && <Link className="button" href="/clients/new">Add a business</Link>}
+      <div className="page-head">
+        <div><h1>Overview</h1><p className="sub">This week, across your businesses.</p></div>
+        <div className="right"><Link className="button" href="/clients/new">Add a business</Link></div>
       </div>
       {saved && <p className="notice" role="status">{saved}.</p>}
-      {failed > 0 && (
-        <p className="error" role="status">{failed} email{failed === 1 ? '' : 's'} failed to send. <Link href="/outbox">See why</Link>.</p>
-      )}
 
-      {clients.length === 0 ? (
-        <section className="card">
-          {isOwner ? (
-            <>
-              <p style={{ marginTop: 0 }}>No businesses yet. Add your first one: paste their website, pick a strategy, approve the first email, and the system starts finding and contacting prospects.</p>
-              <Link className="button" href="/clients/new">Add a business</Link>
-            </>
-          ) : (
-            <p style={{ margin: 0 }}>You are not on any businesses yet. Your manager will assign you prospects, and they will show up here.</p>
-          )}
-        </section>
-      ) : (
-        <div className="biz-list">
-          {clients.map((c) => {
-            const play = getPlay(c.play);
-            const drafts = draftCounts[c.id] ?? 0;
-            const todo = isOwner ? nextStep.get(c.id) : null;
-            return (
-              <Link key={c.id} href={`/clients/${c.id}`} className="card biz-card">
-                <div className="biz-head">
-                  {c.logo_url ? <img src={c.logo_url} alt="" className="biz-logo" /> : <span className="biz-logo placeholder">{c.name.slice(0, 1)}</span>}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong className="biz-name">{c.name}</strong>
-                    <div className="task-meta">{play ? play.name : c.industry || 'No strategy set'}</div>
-                  </div>
-                  {statusPill(c)}
-                </div>
-                <div className="biz-nums">
-                  <span><strong>{c.prospects}</strong> in play</span>
-                  <span><strong>{c.introduced}</strong> introduced</span>
-                  <span><strong>{c.customers}</strong> customers</span>
-                </div>
-                {todo ? (
-                  <div className="biz-todo">Next: {todo}</div>
-                ) : drafts > 0 ? (
-                  <div className="biz-todo">{drafts} repl{drafts === 1 ? 'y' : 'ies'} waiting for you to send</div>
-                ) : null}
-              </Link>
-            );
-          })}
+      <div className="kpis">
+        <div className="kpi"><div className="v">{week.emails}</div><div className="l">Emails sent this week</div>
+          {prior.emails > 0 && <div className={`dl ${delta >= 0 ? 'up' : 'flat'}`}>{delta >= 0 ? '▲' : '▼'} {Math.abs(delta)} vs last week</div>}</div>
+        <div className="kpi"><div className="v">{week.replies}</div><div className="l">Replies this week</div>
+          {drafts.length > 0 && <div className="dl up">▲ {drafts.length} waiting for you</div>}</div>
+        <div className="kpi"><div className="v">{week.customers}</div><div className="l">New customers this week</div></div>
+        <div className="kpi"><div className="v">{week.inplay}</div><div className="l">Prospects in play</div>
+          <svg width="100%" height="26" viewBox="0 0 120 26" preserveAspectRatio="none" style={{ marginTop: 8, display: 'block' }}>
+            <polyline fill="none" stroke="var(--accent)" strokeWidth="2" points={pts} />
+          </svg>
         </div>
-      )}
+      </div>
+
+      <div className="cols">
+        <div>
+          <p className="lab">Needs you now</p>
+          {needs.length === 0 ? (
+            <div className="need"><div className="ic mail">✓</div><div className="tx"><div className="a">All clear</div><div className="b">Nothing is waiting on you. The machine is running.</div></div></div>
+          ) : needs.map((n, i) => (
+            <div className="need" key={i}>
+              <div className={`ic ${n.icon}`}>{n.icon === 'hot' ? '↩' : '✎'}</div>
+              <div className="tx"><div className="a">{n.a}</div><div className="b">{n.b}</div></div>
+              <Link className={`go ${n.sec ? 'sec' : ''}`} href={n.href}>{n.cta}</Link>
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="lab">Your businesses</p>
+          {clients.length === 0 ? (
+            <div className="need"><div className="tx"><div className="a">No businesses yet</div><div className="b">Add your first one to start.</div></div><Link className="go" href="/clients/new">Add</Link></div>
+          ) : clients.map((c) => (
+            <Link className="bizrow" key={c.id} href={`/clients/${c.id}`}>
+              {c.logo_url ? <img className="lg" src={c.logo_url} alt="" /> : <span className="lg">{c.name.slice(0, 1)}</span>}
+              <div className="tx"><div className="a">{c.name}</div>
+                <div className="b">{c.outreach_approved_at ? `Emailing on its own · ${c.prospects} in play` : 'Setting up'}{c.customers > 0 ? ` · ${c.customers} customer${c.customers === 1 ? '' : 's'}` : ''}</div></div>
+              <span className={`hd ${health.get(c.id) === 'warn' ? 'warn' : 'ok'}`}></span>
+            </Link>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
