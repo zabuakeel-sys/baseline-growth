@@ -54,7 +54,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if ((await p.textContent('main')).includes('Still setting up')) fail('approved business should show the live work screen, not setup');
   if (!(await p.locator('a:has-text("See the email")').count())) fail('live business page should show the running status');
 
-  // Next up: a reply, a due call, a new prospect, a call not due yet
+  // Today: the day's work grouped under its business. A reply, a due call, a new prospect, a call not due yet.
   const D = "(now() AT TIME ZONE 'America/Detroit')::date";
   const add = (name, status, on, action, extra = '') => psql(
     `INSERT INTO leads (client_id, name, phone, email, address, received_on, status, next_action_on, next_action, notes)
@@ -64,28 +64,46 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   add('Wes New', 'new', 'NULL', '');
   add('Xia Later', 'following_up', `${D} + 3`, 'Call: follow up');
 
-  psql("UPDATE users SET goal_calls = 3 WHERE email = 'owner@example.test'");
   await p.goto(base + '/next');
-  if (!(await p.textContent('.strip')).includes('0 / 3 calls')) fail('calls goal should show on Today');
+  await p.waitForSelector('.biz-day');
   const name = () => p.textContent('#up-name');
-  if ((await name()) !== 'Una Reply') fail(`replies come first, got ${await name()}`);
-  if (!(await p.locator('.r-tag:has-text("They replied")').count())) fail('reason label missing');
+  // One business block holds today's due leads; businesses are never blended together.
+  if ((await p.locator('.biz-day').count()) !== 1) fail('one business block expected');
+  if (!(await p.textContent('.biz-day .bd-head')).includes('LibraPro')) fail('business header missing');
+  const listed = (await p.locator('.lr-name').allTextContents()).map((s) => s.trim());
+  if (!['Una Reply', 'Vic Due', 'Wes New'].every((n) => listed.includes(n))) fail(`list wrong: ${listed.join(',')}`);
+  if (listed.includes('Xia Later')) fail('a call not due yet should not show');
+  if (!(await p.textContent('.next-up')).includes('3 to contact')) fail('should say 3 to contact');
+  // The reply sits at the top of the block with a Replied chip
+  if (!(await p.locator('.lead-row').first().textContent()).includes('Una Reply')) fail('the reply should be first');
+  if (!(await p.locator('.lead-row:has-text("Una Reply") .r-replied').count())) fail('reply chip missing');
+  await p.screenshot({ path: S + '/32-today-list.png', fullPage: true });
+
+  // Open the reply -> its full researched detail
+  await p.locator('.lead-row', { hasText: 'Una Reply' }).click();
+  await p.waitForSelector('.research');
+  if ((await name()) !== 'Una Reply') fail(`detail name wrong, got ${await name()}`);
+  if (!(await p.locator('.r-tag:has-text("Replied")').count())) fail('reason tag missing on detail');
   if (!(await p.locator('a.call[href^="tel:"]').count())) fail('call button missing');
-  if (!(await p.textContent('.next-up')).includes('3 to go')) fail('should have 3 to go (later call not due)');
-  await p.screenshot({ path: S + '/32-next-up-phone.png', fullPage: true });
+  if (!(await p.locator('.research:has-text("Our outreach")').count())) fail('research block missing');
+  await p.screenshot({ path: S + '/33-lead-detail.png', fullPage: true });
+  // Log the call -> back to the list, the lead is gone
   await p.click('button[value=talked]');
   await p.waitForSelector('p.notice:has-text("logged")');
-  if ((await name()) !== 'Vic Due') fail(`due call should come next, got ${await name()}`);
-  if (!(await p.textContent('.next-up')).includes('1 done today')) fail('done count should go up');
-  // Skip moves Vic to the back
-  await p.click('text=Skip');
-  await p.waitForFunction(() => document.querySelector('#up-name')?.textContent === 'Wes New');
+  await p.waitForSelector('.biz-day');
+  if ((await p.locator('.lr-name').allTextContents()).map((s) => s.trim()).includes('Una Reply')) fail('a logged lead should leave the list');
+
+  // Notes save from the detail
+  await p.locator('.lead-row', { hasText: 'Wes New' }).click();
+  await p.waitForSelector('.research');
   await p.fill('input[name=notes]', 'Rang twice');
   await p.click('button[value=no_answer]');
   await p.waitForSelector('p.notice:has-text("logged")');
   if (psql("SELECT a.notes FROM activities a JOIN leads l ON l.id = a.lead_id WHERE l.name = 'Wes New'") !== 'Rang twice') fail('notes not saved');
-  if ((await name()) !== 'Vic Due') fail(`skipped prospect should come back, got ${await name()}`);
-  // Booking a meeting from the card
+
+  // Booking a meeting from a lead's detail
+  await p.locator('.lead-row', { hasText: 'Vic Due' }).click();
+  await p.waitForSelector('.research');
   await p.click('summary:has-text("Booked a meeting")');
   await p.fill('input[name=time]', '14:30');
   await p.click('button:has-text("Save meeting")');
@@ -93,23 +111,23 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if (psql("SELECT l.status || ' ' || (SELECT count(*) FROM meetings m WHERE m.lead_id = l.id) || ' ' || (SELECT outcome FROM activities a WHERE a.lead_id = l.id) FROM leads l WHERE l.name = 'Vic Due'") !== 'talking 1 meeting_booked') fail('meeting should be booked and logged');
   if (!(await p.locator('.meetings-today').count())) fail('today\'s meeting should show at the top');
   if (!(await p.locator('text=You are clear for today').count())) fail('queue should be empty');
-  const strip = await p.textContent('.strip');
-  if (!strip.includes('3 / 3 calls')) fail(`calls goal should be met, got ${strip}`);
-  await p.screenshot({ path: S + '/33-next-up-done.png', fullPage: true });
+  await p.screenshot({ path: S + '/34-today-clear.png', fullPage: true });
 
-  // A new customer: Next up asks for referrals, and the names become prospects
+  // A new customer: a referral ask shows inside its business block, and the names become prospects
   psql(`INSERT INTO leads (client_id, name, phone, received_on, status, customer_since, closed_on, won_by)
         VALUES (${id}, 'Yara Won', '248-555-0199', ${D} - 20, 'won', ${D} - 2, ${D} - 2, (SELECT id FROM users WHERE email = 'owner@example.test'))`);
   await p.goto(base + '/next');
-  if ((await name()) !== 'Yara Won' || !(await p.locator('.r-tag:has-text("Ask for referrals")').count())) fail('referral ask should come up');
-  await p.screenshot({ path: S + '/34-referral-ask.png', fullPage: true });
+  await p.waitForSelector('.biz-day');
+  if (!(await p.locator('.lead-row:has-text("Yara Won") .lr-tag:has-text("Referrals")').count())) fail('referral ask should show in the business block');
+  await p.locator('.lead-row', { hasText: 'Yara Won' }).click();
+  await p.waitForSelector('.r-tag:has-text("Ask for referrals")');
+  await p.screenshot({ path: S + '/35-referral-ask.png', fullPage: true });
   await p.fill('input[name=name1]', 'Zed Friend');
   await p.fill('input[name=phone1]', '248-555-0177');
   await p.click('button:has-text("Save referrals")');
   await p.waitForSelector('p.notice:has-text("referral")');
   if (psql("SELECT source || ' ' || notes FROM leads WHERE name = 'Zed Friend'") !== 'Referral Referred by Yara Won') fail('referral should be a new prospect');
   if (psql("SELECT referral_asked FROM leads WHERE name = 'Yara Won'") !== 't') fail('ask should be marked done');
-  if ((await name()) !== 'Zed Friend') fail(`the referral should be up next, got ${await name()}`);
 
   await browser.close();
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL CHECKS PASSED');

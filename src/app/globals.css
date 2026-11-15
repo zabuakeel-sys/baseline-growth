@@ -363,3 +363,35 @@ a.call svg, button.call svg { width: 16px; height: 16px; }
   .kpis { grid-template-columns: 1fr 1fr; }
   .cols { grid-template-columns: 1fr; }
 }
+
+/* Today: the day's list of leads, each opening into a researched detail */
+.lead-list { padding: 6px; }
+.lead-list .ll-head { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px 6px; flex-wrap: wrap; }
+.lead-list .ll-h { font-size: 13px; font-weight: 700; letter-spacing: .01em; }
+.lead-list .ll-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 11.5px; font-weight: 700; vertical-align: middle; }
+.lead-list .ll-sub { font-size: 12px; color: var(--faint); }
+.lead-row { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; text-decoration: none; color: var(--ink); transition: background .12s; }
+.lead-row:hover { background: var(--panel-2); }
+.lead-row + .lead-row { border-top: 1px solid var(--line); border-radius: 0; }
+.lead-row .d { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.lead-row .lr-main { min-width: 0; flex: 1; }
+.lead-row .lr-name { font-weight: 650; font-size: 15px; line-height: 1.3; }
+.lead-row .lr-ctx { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lead-row .lr-co { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.lead-row .chev { color: var(--faint); font-size: 20px; line-height: 1; flex: none; }
+
+/* "What we know" research panel inside a lead's detail */
+.research { margin: 16px 0 0; border: 1px solid var(--line-2); border-radius: 11px; overflow: hidden; }
+.research .rh { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); font-weight: 700; padding: 11px 15px; background: var(--panel-2); border-bottom: 1px solid var(--line-2); }
+.research .rline { display: grid; grid-template-columns: 120px 1fr; gap: 14px; padding: 11px 15px; font-size: 14px; line-height: 1.5; }
+.research .rline + .rline { border-top: 1px solid var(--line); }
+.research .rline b { color: var(--faint); font-weight: 650; font-size: 12.5px; }
+.research .rline a { color: var(--accent); }
+@media (max-width: 560px) { .research .rline { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Today grouped by business: each business keeps its own block */
+.biz-day { padding: 6px; }
+.biz-day .bd-head { display: flex; align-items: baseline; gap: 10px; padding: 11px 12px 8px; }
+.biz-day .bd-head h2 { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.biz-day .bd-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 11.5px; font-weight: 700; }
+.lr-tag { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
