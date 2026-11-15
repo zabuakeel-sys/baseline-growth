@@ -10,6 +10,16 @@ type Result = { error?: string };
 const back = (msg: string): never => redirect(`/outbox?saved=${encodeURIComponent(msg)}`);
 const refresh = () => { revalidatePath('/outbox'); revalidatePath('/leads'); };
 
+/** Flip between "approve each email first" (safe default) and "send on its own". */
+export async function setAutoSend(on: boolean): Promise<never> {
+  await requireOwner();
+  await query('UPDATE outreach_settings SET auto_send = $1 WHERE id = 1', [on]);
+  // Turning automatic on releases what is already waiting; reply drafts always wait for a person.
+  if (on) await query("UPDATE outbox SET status = 'approved', approved_at = now() WHERE status = 'pending' AND kind = 'sequence'");
+  refresh();
+  return back(on ? 'Emails now send on their own' : 'Emails now wait for your approval');
+}
+
 export async function runNow(): Promise<Result> {
   await requireUser();
   const r = await runOutreach();
@@ -38,7 +48,6 @@ export async function reviewOutbox(formData: FormData): Promise<Result> {
 
 export async function saveSettings(formData: FormData): Promise<Result> {
   await requireOwner();
-  const autoSend = formData.get('auto_send') === 'on';
   const limit = parseWholeNumber(formData.get('daily_limit'));
   const start = parseWholeNumber(formData.get('start_hour'));
   const end = parseWholeNumber(formData.get('end_hour'));
@@ -50,11 +59,8 @@ export async function saveSettings(formData: FormData): Promise<Result> {
   if (start === null || end === null || Number.isNaN(start) || Number.isNaN(end) || start >= end || end > 24) {
     return { error: 'Sending hours must be a start hour before the end hour, 0 to 24.' };
   }
-  await query('UPDATE outreach_settings SET auto_send = $1, daily_limit = $2, start_hour = $3, end_hour = $4, max_searches_per_day = $5, enrich_daily_limit = $6 WHERE id = 1',
-    [autoSend, limit, start, end, searches, enrich]);
-  // Switching to automatic releases what is already waiting for approval.
-  // Reply drafts always wait for a person.
-  if (autoSend) await query("UPDATE outbox SET status = 'approved', approved_at = now() WHERE status = 'pending' AND kind = 'sequence'");
+  await query('UPDATE outreach_settings SET daily_limit = $1, start_hour = $2, end_hour = $3, max_searches_per_day = $4, enrich_daily_limit = $5 WHERE id = 1',
+    [limit, start, end, searches, enrich]);
   refresh();
   return back('Settings saved');
 }

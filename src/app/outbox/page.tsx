@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { getSettings } from '@/lib/engine';
 import { mailStatus } from '@/lib/mail';
-import { decideReplyDraft, reviewOutbox, runNow, saveSettings } from './actions';
+import { decideReplyDraft, reviewOutbox, runNow, saveSettings, setAutoSend } from './actions';
 import { INTENTS } from '@/lib/coach';
 import ActionForm from '../ActionForm';
 
@@ -49,19 +49,41 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
     === new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date())).length;
   const pending = waiting.filter((m) => m.status === 'pending');
 
+  const waitingCount = pending.length + drafts.filter((d) => d.status === 'pending').length;
+  const auto = settings.auto_send;
+
   return (
     <>
-      <div className="actions" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>Outbox</h1>
-          <p className="sub" style={{ margin: 0 }}>
-            Every few minutes the system runs autopilot (finds and assigns new prospects), queues messages that are due, sends approved ones on weekdays from {settings.start_hour}:00
-            to {settings.end_hour}:00 (Michigan time), up to {settings.daily_limit} a day, and reads replies.
-          </p>
+      <div className="page-head"><div><h1>Automatic emailing</h1>
+        <p className="sub">The system finds new businesses, writes each one a first email and a few follow-ups, and handles the replies. You decide whether it sends on its own.</p></div></div>
+      {saved && <p className="notice" role="status">{saved}.</p>}
+
+      <div className="card auto-hero">
+        <div className="ah-top">
+          <div>
+            <div className="ah-state"><span className={`dot ${auto ? 'on' : 'hold'}`}></span>{auto ? 'Sending emails on its own' : 'Holding each email for you to approve'}</div>
+            <p className="ah-how">
+              Runs every few minutes: finds and assigns new prospects, writes the emails that are due, {auto ? 'sends them' : 'and waits for your OK to send'} on weekdays {settings.start_hour}:00–{settings.end_hour}:00 Michigan time, up to {settings.daily_limit} a day. Replies land below.
+            </p>
+          </div>
+          <ActionForm action={runNow}><button type="submit" className="secondary">Run now</button></ActionForm>
         </div>
-        <ActionForm action={runNow}><button type="submit" className="secondary">Run now</button></ActionForm>
+        <div className="ah-stats">
+          <div className="ah-stat"><div className="n">{sentToday}</div><div className="l">sent today</div></div>
+          <div className="ah-stat"><div className="n">{waitingCount}</div><div className="l">waiting for you</div></div>
+          <div className="ah-stat"><div className="n" style={{ fontSize: 16 }}>{settings.last_run_at ? when(settings.last_run_at) : 'not yet'}</div><div className="l">last checked</div></div>
+        </div>
+        {isOwner && (
+          <div className="ah-mode">
+            <span className="muted">How emails go out:</span>
+            <div className="segmented">
+              <form action={setAutoSend.bind(null, false)}><button type="submit" aria-current={!auto ? 'page' : undefined} className="seg">I approve each one first</button></form>
+              <form action={setAutoSend.bind(null, true)}><button type="submit" aria-current={auto ? 'page' : undefined} className="seg">Send on its own</button></form>
+            </div>
+          </div>
+        )}
+        {settings.last_error && <p className="error" style={{ marginBottom: 0 }}>Last run problem: {settings.last_error}</p>}
       </div>
-      {saved && <p className="notice" role="status" style={{ marginTop: 12 }}>{saved}.</p>}
 
       {!hasBoxes && (!status.send || !status.read) && (
         <div className="card warn-card" style={{ marginTop: 16 }}>
@@ -81,17 +103,9 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      <div className="stats" style={{ marginTop: 16 }}>
-        <div className="stat"><div className="label">Waiting for approval</div><div className="value">{pending.length + drafts.filter((d) => d.status === 'pending').length}</div></div>
-        <div className="stat"><div className="label">Sent today</div><div className="value">{sentToday}</div></div>
-        <div className="stat"><div className="label">Mode</div><div className="value" style={{ fontSize: 18 }}>{settings.auto_send ? 'Automatic' : 'Approve first'}</div></div>
-        <div className="stat"><div className="label">Last run</div><div className="value" style={{ fontSize: 18 }}>{settings.last_run_at ? when(settings.last_run_at) : 'Not yet'}</div></div>
-      </div>
-      {settings.last_error && <p className="error">Last run problem: {settings.last_error}</p>}
-
       <section className="card" aria-labelledby="drafts-h">
-        <h2 id="drafts-h">Reply drafts ({drafts.length})</h2>
-        {drafts.length === 0 ? <p className="muted" style={{ margin: 0 }}>When a prospect replies, a draft answer appears here. Nothing is sent until you approve it.</p> : (
+        <h2 id="drafts-h">Replies to answer ({drafts.length})</h2>
+        {drafts.length === 0 ? <p className="muted" style={{ margin: 0 }}>When a prospect replies, a ready-to-send answer appears here. Nothing goes out until you approve it.</p> : (
           <ul className="plain-list">
             {drafts.map((d) => (
               <li key={d.id} className="draft">
@@ -118,8 +132,8 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
       </section>
 
       <section className="card" aria-labelledby="queue-h">
-        <h2 id="queue-h">Queued ({waiting.length})</h2>
-        {waiting.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nothing queued. Messages appear here when prospects are due.</p> : (
+        <h2 id="queue-h">Emails waiting for your approval ({waiting.length})</h2>
+        {waiting.length === 0 ? <p className="muted" style={{ margin: 0 }}>{auto ? 'Nothing waiting — emails are sending on their own.' : 'Nothing waiting. Emails appear here when a prospect is due, for you to approve.'}</p> : (
           <ActionForm action={reviewOutbox}>
             <div className="actions" style={{ marginBottom: 8 }}>
               <button type="submit" name="decision" value="approve">Approve ticked</button>
@@ -174,12 +188,8 @@ export default async function OutboxPage({ searchParams }: { searchParams: Promi
 
       {isOwner && (
         <section className="card" aria-labelledby="settings-h">
-          <h2 id="settings-h">Settings</h2>
-          <ActionForm className="grid" action={saveSettings}>
-            <label className="check full">
-              <input type="checkbox" name="auto_send" defaultChecked={settings.auto_send} style={{ minHeight: 0 }} />
-              Send automatically, without approval
-            </label>
+          <h2 id="settings-h">Advanced settings <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>· sending hours, daily limits</span></h2>
+          <ActionForm className="grid settings-grid" action={saveSettings}>
             <label>Most emails per day<input name="daily_limit" inputMode="numeric" defaultValue={settings.daily_limit} /></label>
             <label>Start hour (Michigan time)<input name="start_hour" inputMode="numeric" defaultValue={settings.start_hour} /></label>
             <label>End hour<input name="end_hour" inputMode="numeric" defaultValue={settings.end_hour} /></label>

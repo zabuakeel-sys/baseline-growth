@@ -131,9 +131,8 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   // Follow-up for Cy three days later is threaded, and automatic mode sends without approval
   psql("UPDATE leads SET received_on = received_on - 3 WHERE name = 'Cy Cole'");
   await p.goto(base + '/outbox');
-  await p.check('input[name=auto_send]');
-  await p.click('text=Save settings');
-  await p.waitForSelector('p.notice:has-text("Settings saved")');
+  await p.click('button:has-text("Send on its own")');
+  await p.waitForSelector('p.notice:has-text("send on their own")');
   console.log('run 4:', await runNow(p));
   const cyFollow = sent().filter((m) => m.to.includes('cy@'));
   if (cyFollow.length !== 2) fail('Cy should have a follow-up');

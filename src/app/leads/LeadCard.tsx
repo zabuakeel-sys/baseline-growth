@@ -71,7 +71,7 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
       )}
       {message && (lead.outbox_status === 'pending' || lead.outbox_status === 'approved') && (
         <p className="task-meta" style={{ margin: '8px 0' }}>
-          {touch === 0 ? 'First message' : `Follow-up ${touch}`} is in the <Link href="/outbox">Outbox</Link>
+          {touch === 0 ? 'First email' : `Follow-up ${touch}`} is with <Link href="/outbox">automatic emailing</Link>
           {lead.outbox_status === 'pending' ? ', waiting for approval.' : ', approved; it goes out automatically.'}
         </p>
       )}
