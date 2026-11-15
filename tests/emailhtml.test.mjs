@@ -22,3 +22,13 @@ test('logo goes after the signature, only from https links', () => {
   assert.equal(safeLogoUrl('javascript:alert(1)'), '');
   assert.doesNotMatch(toHtml(text, { logoUrl: 'javascript:alert(1)' }), /<img/);
 });
+
+test('the owner\'s own first email gets the logo even with no "On behalf of" line', () => {
+  // This is the real custom opening email: the owner's sign-off, then only the legal opt-out.
+  const custom = 'Hi there,\n\nList your shop on AutoAt free.\n\nRita\n\nIf you\'d rather not hear from us, reply "no thanks".\n123 Main St';
+  const html = toHtml(custom, { logoUrl: 'https://autoat.example/logo.png', clientName: 'AutoAt' });
+  const sig = html.indexOf('Rita');
+  const img = html.indexOf('<img src="https://autoat.example/logo.png" alt="AutoAt"');
+  const optOut = html.indexOf('no thanks');
+  assert.ok(sig > 0 && img > sig && optOut > img, 'logo sits after the sign-off and before the opt-out');
+});

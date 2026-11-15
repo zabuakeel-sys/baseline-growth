@@ -1,6 +1,6 @@
 import type { Client } from '@/lib/clients';
 import { starterEmail } from '@/lib/setup';
-import { approveOutreach, pauseOutreach, resetOutreachEmail, saveOutreachEmail } from './outreach';
+import { approveOutreach, pauseOutreach, resetOutreachEmail, saveOutreachEmail, sendTestOutreach } from './outreach';
 import ActionForm from '../ActionForm';
 
 /**
@@ -36,6 +36,13 @@ export default async function ApprovePanel({ client, back }: { client: Client; b
         </div>
       </ActionForm>
 
+      <div className="actions" style={{ marginTop: 10 }}>
+        <ActionForm action={sendTestOutreach.bind(null, client.id, back)}>
+          <button type="submit" className="secondary" disabled={!ready}>Send a test to me</button>
+        </ActionForm>
+        <span className="muted" style={{ fontSize: 13 }}>Sends this email to your own inbox, with the {client.name} logo and layout, so you see exactly what a shop gets. Save it first.</span>
+      </div>
+
       <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: '16px 0' }} />
 
       {live ? (
@@ -47,11 +54,11 @@ export default async function ApprovePanel({ client, back }: { client: Client; b
         <div>
           <p className="muted" style={{ margin: '0 0 8px' }}>
             {ready
-              ? 'When this email is exactly how you want it, start sending. It goes to prospects on their schedule, and you can pause any time.'
-              : 'Save the email above first. Then you can start sending.'}
+              ? `When this email is exactly how you want it, begin sending. Each shop gets it with the ${client.name} logo and a clean layout, on its own schedule inside your sending hours. You can pause any time.`
+              : 'Save the email above first. Then you can begin sending.'}
           </p>
           <ActionForm action={approveOutreach.bind(null, client.id, back)}>
-            <button type="submit" disabled={!ready}>Start sending to prospects</button>
+            <button type="submit" disabled={!ready}>Begin sending</button>
           </ActionForm>
         </div>
       )}

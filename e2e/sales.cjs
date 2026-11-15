@@ -44,9 +44,8 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await o.fill('input[name=contract_start]', month + '-01');
   await o.click('text=Save client');
   await o.waitForSelector('p.notice');
-  await o.fill('textarea[name=call_script]', 'Opening: Hi, this is Rita calling for LibraPro.\nAsk for: a free walkthrough this week.');
-  await o.click('text=Save script');
-  await o.waitForSelector('p.notice:has-text("Script saved")');
+  // The call script is set directly now (its editor moved out of Settings; it belongs with the call assistant).
+  psql("UPDATE clients SET call_script = 'Opening: Hi, this is Rita calling for LibraPro.\nAsk for: a free walkthrough this week.' WHERE name = 'LibraPro Facility Services'");
   await o.goto(clientUrl + '/prospects');
   await o.waitForSelector('#leads-h');
   for (const [name, phone, address] of [

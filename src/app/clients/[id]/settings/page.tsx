@@ -11,7 +11,6 @@ import { placesConfigured } from '@/lib/places';
 import { getPlay } from '@/lib/plays';
 import { updateClient } from '../../actions';
 import { saveCustomerRevenue } from '../../../leads/actions';
-import { saveScript } from '../../../sales/actions';
 import { saveRepTools } from '../../../tools/actions';
 import { saveAutopilot } from '../../onboarding';
 import ClientForm from '../../ClientForm';
@@ -103,17 +102,6 @@ export default async function SettingsPage({ params, searchParams }: {
       </section>
 
       {isOwner && <MailboxPanel clientId={id} clientName={client.name} />}
-
-      <section className="card" aria-labelledby="script-h">
-        <h2 id="script-h">Call script</h2>
-        <p className="muted" style={{ marginTop: 0 }}>What reps say on the phone and at the door for {client.name}. It shows on every call.</p>
-        <ActionForm action={saveScript.bind(null, id)}>
-          <label>Script
-            <textarea name="call_script" defaultValue={client.call_script} rows={10} placeholder={`Opening: Hi, this is [name] calling for ${client.name}. Do you have 30 seconds?\n\nIf they say "we're all set": ...\n\nAsk for: a 15-minute walkthrough this week.`} />
-          </label>
-          <div className="actions" style={{ marginTop: 8 }}><button type="submit">Save script</button></div>
-        </ActionForm>
-      </section>
 
       <section className="card" aria-labelledby="tools-h">
         <h2 id="tools-h">Booking link and quote</h2>

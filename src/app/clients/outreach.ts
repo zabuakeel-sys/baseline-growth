@@ -3,9 +3,42 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { query } from '@/lib/db';
 import { requireOwner } from '@/lib/auth';
+import { getClient } from '@/lib/clients';
+import { starterEmail } from '@/lib/setup';
+import { outreachAccount, sendMail } from '@/lib/mail';
+import { fillEmail, ensureFooter } from '@/lib/followup';
+import { toHtml } from '@/lib/emailhtml';
 
 type Result = { error?: string; field?: string };
 const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/');
+
+/**
+ * Sends the first email to the owner's own inbox so they can see exactly what a prospect gets, with
+ * the logo and layout. This is a real send through the connected mailbox, so it also proves sending
+ * works end to end.
+ */
+export async function sendTestOutreach(clientId: number, back: string): Promise<Result> {
+  const user = await requireOwner();
+  const found = await getClient(clientId);
+  if (!found) return { error: 'That business no longer exists.' };
+  const c = found.client;
+  const account = await outreachAccount(clientId);
+  if (!account) return { error: 'Connect a sending mailbox first on the Automatic emailing page.' };
+  const to = (await query<{ email: string }>('SELECT email FROM users WHERE id = $1', [user.id])).rows[0]?.email;
+  if (!to) return { error: 'Your account has no email to send the test to.' };
+  const draft = await starterEmail(c);
+  const ctx = { firstName: '', name: 'Sample Shop', city: 'Troy', clientName: c.name, claimUrl: c.claim_url, address: c.mailing_address };
+  const subject = `[Test] ${fillEmail(draft.subject, ctx, false).replace(/\n+/g, ' ').trim()}`;
+  const text = ensureFooter(fillEmail(draft.body, ctx), { address: c.mailing_address });
+  const html = toHtml(text, { logoUrl: c.logo_url, clientName: c.name });
+  try {
+    await sendMail({ to, subject, text, html }, account);
+  } catch (err) {
+    return { error: `Could not send the test: ${(err as Error).message}` };
+  }
+  const [path, hash] = safe(back).split('#');
+  redirect(`${path}?saved=${encodeURIComponent(`Test email sent to ${to}. Check your inbox and your spam folder`)}${hash ? `#${hash}` : ''}`);
+}
 
 /** Saves the owner's perfected first email (subject + body). Does not start sending. */
 export async function saveOutreachEmail(clientId: number, back: string, formData: FormData): Promise<Result> {

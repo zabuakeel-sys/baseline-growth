@@ -14,12 +14,20 @@ export function safeLogoUrl(url) {
   }
 }
 
+/** The legal opt-out footer line ensureFooter/signOff add to every email. */
+const OPT_OUT = /rather not hear from us|no thanks|unsubscribe|opt[\s-]?out/i;
+
 /** Plain text -> minimal HTML paragraphs, with the logo placed after the signature block. */
 export function toHtml(text, { logoUrl = '', clientName = '' } = {}) {
   const blocks = String(text).split(/\n{2,}/);
   const logo = safeLogoUrl(logoUrl);
-  // The signature is the block that starts with the sender's name and "On behalf of".
-  const sigIndex = blocks.findIndex((b) => /On behalf of /.test(b));
+  // The signature is where the sender signs off. In AI/template emails that is the
+  // "On behalf of ..." block; in the owner's own first email it is just their sign-off,
+  // which is the last block before the legal opt-out footer. The logo goes right after it,
+  // so a custom first email gets the logo too (not only ones with an "On behalf of" line).
+  const footerIndex = blocks.findIndex((b) => OPT_OUT.test(b));
+  let sigIndex = blocks.findIndex((b) => /On behalf of /.test(b));
+  if (sigIndex < 0) sigIndex = footerIndex > 0 ? footerIndex - 1 : blocks.length - 1;
   const parts = blocks.map((b, i) => {
     const html = `<p style="margin:0 0 14px">${esc(b).replace(/\n/g, '<br>')}</p>`;
     if (i === sigIndex && logo) {
