@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SCHEDULE_DAYS, daysBetween, isDue, leadStats, messageFor, needsDecision, nextDue } from '../src/lib/followup.js';
+import { SCHEDULE_DAYS, daysBetween, isDue, leadStats, messageFor, needsDecision, nextDue, fillEmail } from '../src/lib/followup.js';
 
 test('outreach schedule: first message, then 3, 7 and 14 days later', () => {
   assert.deepEqual(SCHEDULE_DAYS, [0, 3, 7, 14]);
@@ -79,4 +79,12 @@ test('fillEmail handles bracket placeholders, claim link, and ensureFooter adds 
   const already = ensureFooter('Body\n\nreply "no thanks" to stop.\n1 Main St, Troy, MI', { address: '1 Main St, Troy, MI' });
   assert.equal((already.match(/no thanks/g) || []).length, 1);
   assert.equal((already.match(/1 Main St/g) || []).length, 1);
+});
+
+test('fillEmail greets a body but never a subject line', () => {
+  const body = fillEmail('Claim your free {company} listing', { clientName: 'AutoAt' });
+  assert.match(body, /^Hi there,/); // a body gets a greeting
+  const subject = fillEmail('Claim your free {company} listing', { clientName: 'AutoAt' }, false);
+  assert.equal(subject, 'Claim your free AutoAt listing'); // a subject does not
+  assert.ok(!/^Hi/.test(subject));
 });

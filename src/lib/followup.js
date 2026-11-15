@@ -124,7 +124,7 @@ export const OPT_OUT_LINE = 'If you\'d rather not hear from us, reply "no thanks
  * (platform/business), the claim link, the mailing address, and unsubscribe. Adds a greeting if the
  * owner didn't write one. The legal footer is handled separately by ensureFooter.
  */
-export function fillEmail(text, { firstName = '', name = '', city = '', clientName = '', claimUrl = '', address = '' } = {}) {
+export function fillEmail(text, { firstName = '', name = '', city = '', clientName = '', claimUrl = '', address = '' } = {}, addGreeting = true) {
   const first = firstName || greetingName(name) || 'there';
   let out = String(text || '');
   const sub = (re, val) => { out = out.replace(re, val); };
@@ -136,7 +136,8 @@ export function fillEmail(text, { firstName = '', name = '', city = '', clientNa
   sub(/\[[^\]]*\b(mailing\s*)?address\b[^\]]*\]|\{\s*(mailing_?)?address\s*\}/gi, (address || '').trim());
   sub(/\[[^\]]*\bunsubscribe\b[^\]]*\]|\{\s*unsubscribe\s*\}|\[[^\]]*\bopt[\s-]?out\b[^\]]*\]/gi, OPT_OUT_LINE);
   sub(/\{\s*name\s*\}/gi, name || first);
-  if (!/^\s*(hi|hey|hello|dear)\b/i.test(out)) out = `Hi ${first},\n\n${out.trim()}`;
+  // Only a body gets a greeting; a subject line must not (passing addGreeting = false).
+  if (addGreeting && !/^\s*(hi|hey|hello|dear)\b/i.test(out)) out = `Hi ${first},\n\n${out.trim()}`;
   return out.trim();
 }
 

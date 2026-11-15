@@ -80,7 +80,7 @@ async function queueDue(settings: Settings) {
           const ctx = { name: l.name, city: cityOf(l.address), clientName: l.client_name, claimUrl: l.claim_url, address: l.mailing_address };
           // The owner's exact email: only the name, city and link change per shop. No AI rewriting.
           // The owner's own sign-off stays; only the legal opt-out + address are guaranteed.
-          subject = fillEmail(l.outreach_subject, ctx).replace(/\n+/g, ' ').trim();
+          subject = fillEmail(l.outreach_subject, ctx, false).replace(/\n+/g, ' ').trim();
           body = ensureFooter(fillEmail(l.outreach_body, ctx), { address: l.mailing_address });
         } else {
           const written = await writeOutreachEmail({
