@@ -158,8 +158,12 @@ export async function sendMail(
   if (!account) throw new Error('No mailbox is connected for sending.');
   if (account.graph) return graphSend(account.graph.mailbox, m);
   const messageId = `<${randomUUID()}@${domainOf(account.from)}>`;
+  // A standards-compliant unsubscribe path. Mailbox providers (Gmail, Yahoo) treat its presence as a
+  // trust signal and are less likely to spam-file the sender; it points at the real reply-to opt-out.
+  const unsubAddr = account.from.match(/<([^>]+)>/)?.[1] ?? account.from.trim();
   await (await transportFor(account)).sendMail({
     from: account.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), messageId,
+    headers: { 'List-Unsubscribe': `<mailto:${unsubAddr}?subject=unsubscribe>` },
     ...(m.inReplyTo ? { inReplyTo: m.inReplyTo, references: m.inReplyTo } : {}),
   });
   return messageId;
