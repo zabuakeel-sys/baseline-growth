@@ -9,7 +9,9 @@ export type Move = {
   copy?: string;
   caution?: string;
 };
-export function channelMoves(ctx?: {
+type MoveCtx = {
   play?: string; business?: string; name?: string; contactName?: string; offer?: string;
   phone?: string; address?: string; claimLabel?: string;
-}): Move[];
+};
+export function channelMoves(ctx?: MoveCtx): Move[];
+export function moveSequence(ctx?: MoveCtx): (Move & { days: number })[];

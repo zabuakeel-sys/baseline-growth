@@ -59,3 +59,21 @@ export function channelMoves(ctx = {}) {
 
   return moves;
 }
+
+// The timed sequence a rep walks one move at a time, with the days to wait before each becomes due.
+// Cold SMS is deliberately left out of the automatic sequence (legal risk); it stays a manual option.
+const SEQUENCE_ORDER = ['linkedin', 'mail', 'gift'];
+const SEQUENCE_GAP = { linkedin: 1, mail: 4, gift: 7 };
+
+/**
+ * The ordered multichannel sequence for one prospect: the moves to do in turn, each with `days` (how
+ * long to wait before it is due). Moves that do not apply (e.g. mail with no address) are left out,
+ * so the sequence is the real list of steps for this lead.
+ */
+export function moveSequence(ctx = {}) {
+  const all = channelMoves(ctx);
+  return SEQUENCE_ORDER
+    .map((kind) => all.find((m) => m.channel === kind))
+    .filter(Boolean)
+    .map((m) => ({ ...m, days: SEQUENCE_GAP[m.channel] ?? 3 }));
+}

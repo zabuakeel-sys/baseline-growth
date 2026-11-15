@@ -6,7 +6,8 @@ import { nextQueue, reasonFor } from '@/lib/queue';
 import { routeLink } from '@/lib/playbook';
 import { bestCallTime } from '@/lib/calltime';
 import { fitReasons } from '@/lib/finder';
-import { channelMoves } from '@/lib/moves';
+import { moveSequence } from '@/lib/moves';
+import { advanceMove } from '../sales/actions';
 import { isWarm, warmSource, warmFirst } from '@/lib/warm';
 import CopyButton from '../leads/CopyButton';
 import { today } from '@/lib/work';
@@ -244,23 +245,7 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
         <Link className="button secondary" href={`/call/${lead.id}?from=next`}>Listen and coach me</Link>
       </div>
 
-      <details className="card moves" style={{ marginTop: 16 }}>
-        <summary><strong>Reach them another way</strong> <span className="muted">· LinkedIn, mail, text, a gift</span></summary>
-        <ul className="plain-list" style={{ marginTop: 8 }}>
-          {channelMoves({ play: lead.client_play, business: lead.client_name, name: lead.name, contactName: lead.contact_name, offer: lead.client_offer, phone: lead.phone, address: lead.address }).map((m, i) => (
-            <li key={i} style={{ padding: '10px 0' }}>
-              <div><strong>{m.title}</strong> <span className="muted">· {m.when}</span></div>
-              <pre className="message" style={{ margin: '6px 0' }}>{m.message}</pre>
-              <div className="actions" style={{ gap: 8 }}>
-                {m.link && <a className="button secondary small" href={m.link} target="_blank" rel="noreferrer">{m.linkLabel}</a>}
-                {m.sms && <a className="button secondary small" href={`sms:${m.sms}?&body=${encodeURIComponent(m.message)}`}>Open a text</a>}
-                <CopyButton text={m.copy || m.message} />
-              </div>
-              {m.caution && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{m.caution}</p>}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <NextMove lead={lead} back={back} now={now} />
 
       <div className="divline"></div>
       <div className="ol">Log what happened — you go back to the list.</div>
@@ -284,6 +269,32 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
       {lead.client_script && <details style={{ marginTop: 10 }}><summary className="muted">Full script and answers to objections</summary><pre className="message">{lead.client_script}</pre></details>}
       <p className="task-meta" style={{ marginTop: 12 }}><Link href={`/clients/${lead.client_id}/prospects`}>Full record</Link></p>
     </article>
+  );
+}
+
+// One multichannel move at a time. The system remembers where each lead is (move_step) and shows
+// only the next move; marking it done advances to the next and schedules when it is due.
+function NextMove({ lead, back, now }: { lead: Lead; back: string; now: string }) {
+  const seq = moveSequence({ play: lead.client_play, business: lead.client_name, name: lead.name, contactName: lead.contact_name, offer: lead.client_offer, phone: lead.phone, address: lead.address });
+  const step = lead.move_step ?? 0;
+  const m = seq[step];
+  if (!m) return <p className="task-meta" style={{ marginTop: 16 }}>✓ Extra moves done for this prospect.</p>;
+  const planned = Boolean(lead.move_next_on && lead.move_next_on > now);
+  const nextDate = lead.move_next_on ? new Date(`${lead.move_next_on}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+  const after = seq[step + 1];
+  return (
+    <div className="card nextmove" style={{ marginTop: 16 }}>
+      <div><strong>Next move: {m.title}</strong> <span className="muted">· step {step + 1} of {seq.length}{planned ? ` · planned for ${nextDate}` : ''}</span></div>
+      <pre className="message" style={{ margin: '8px 0' }}>{m.message}</pre>
+      <div className="actions" style={{ gap: 8 }}>
+        {m.link && <a className="button secondary small" href={m.link} target="_blank" rel="noreferrer">{m.linkLabel}</a>}
+        {m.copy && <CopyButton text={m.copy} label="Copy address" />}
+        <CopyButton text={m.message} />
+      </div>
+      {m.caution && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{m.caution}</p>}
+      <form action={advanceMove.bind(null, lead.id, back)} style={{ marginTop: 12 }}><button type="submit">I did this, go to the next move</button></form>
+      {after && <p className="task-meta" style={{ marginTop: 6 }}>Then: {after.title.toLowerCase()}, in {after.days} day{after.days === 1 ? '' : 's'}.</p>}
+    </div>
   );
 }
 

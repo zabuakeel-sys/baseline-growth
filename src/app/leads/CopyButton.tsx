@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 
-export default function CopyButton({ text }: { text: string }) {
+export default function CopyButton({ text, label = 'Copy message' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -17,7 +17,7 @@ export default function CopyButton({ text }: { text: string }) {
         }
       }}
     >
-      {copied ? 'Copied' : 'Copy message'}
+      {copied ? 'Copied' : label}
     </button>
   );
 }

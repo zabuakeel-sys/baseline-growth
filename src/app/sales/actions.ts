@@ -10,6 +10,7 @@ import { currentStep } from '@/lib/cadence';
 import { routeLink } from '@/lib/playbook';
 import { orderByNearest } from '@/lib/route';
 import { ensureCoords } from '@/lib/geocode';
+import { moveSequence } from '@/lib/moves';
 
 type Result = { error?: string };
 
@@ -33,6 +34,24 @@ export async function planVisitRoute(leadIds: number[], originLat: number | null
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const plusDays = (iso: string, days: number) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+
+/**
+ * Marks the current multichannel move done and schedules the next one, so the rep does one move at a
+ * time and the system remembers where each lead is. When the sequence is finished, it stops.
+ */
+export async function advanceMove(leadId: number, back: string): Promise<never> {
+  const user = await requireUser();
+  const lead = (await query<{ move_step: number; name: string; contact_name: string; client_name: string; client_offer: string; phone: string; address: string; play: string }>(
+    `SELECT l.move_step, l.name, l.contact_name, l.phone, l.address, c.name AS client_name, c.offer AS client_offer, c.play
+     FROM leads l JOIN clients c ON c.id = l.client_id WHERE l.id = $1`, [leadId])).rows[0];
+  if (!lead) redirect(withSaved(back, 'That prospect no longer exists'));
+  const seq = moveSequence({ play: lead.play, business: lead.client_name, name: lead.name, contactName: lead.contact_name, offer: lead.client_offer, phone: lead.phone, address: lead.address });
+  const next = Math.min(lead.move_step + 1, seq.length);
+  const nextOn = next < seq.length ? plusDays(today(), seq[next].days) : null;
+  await query('UPDATE leads SET move_step = $2, move_next_on = $3 WHERE id = $1', [leadId, next, nextOn]);
+  redirect(withSaved(back, next < seq.length ? `Done. Next move: ${seq[next].title.toLowerCase()}` : 'Done. All extra moves finished'));
+}
 const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/next');
 const withSaved = (back: string, msg: string) => {
   const [path, hash] = safe(back).split('#');

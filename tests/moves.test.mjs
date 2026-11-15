@@ -33,3 +33,16 @@ test('a gift move is always offered and a contact name is used when present', ()
   const g2 = channelMoves({}).find((x) => x.channel === 'gift');
   assert.match(g2.message, /owner or manager/);
 });
+
+import { moveSequence } from '../src/lib/moves.js';
+
+test('moveSequence is an ordered, gapped sequence: LinkedIn, then mail (if address), then gift', () => {
+  const withAddr = moveSequence({ business: 'X', name: 'Y', address: '1 Main St', contactName: 'Jo' });
+  assert.deepEqual(withAddr.map((m) => m.channel), ['linkedin', 'mail', 'gift']);
+  assert.ok(withAddr.every((m) => typeof m.days === 'number'));
+  assert.ok(withAddr[1].days > withAddr[0].days); // later moves wait longer
+  // No address -> mail drops out, LinkedIn then gift.
+  assert.deepEqual(moveSequence({ business: 'X' }).map((m) => m.channel), ['linkedin', 'gift']);
+  // Cold SMS is never an auto-sequence step.
+  assert.ok(!moveSequence({ business: 'X', phone: '2485550000' }).some((m) => m.channel === 'sms'));
+});
