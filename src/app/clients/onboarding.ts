@@ -8,6 +8,7 @@ import { readSite } from '@/lib/research';
 import { draftSignup } from '@/lib/coach';
 import { parsePricingLines } from '@/lib/playbook';
 import { applyPlay } from '@/lib/plays';
+import { suggestPlay } from '@/lib/suggestPlay';
 import { parseDollarsToCents, parsePercent, parseWholeNumber } from '@/lib/money';
 
 type Result = { error?: string; field?: string };
@@ -174,6 +175,32 @@ export async function readWebsite(formData: FormData): Promise<Result> {
   // A pricing draft the form cannot read is dropped rather than shown as an error later.
   if (answers.pricing && parsePricingLines(String(answers.pricing)).errors.length) answers.pricing = '';
   const filled = Object.entries(answers).filter(([k, v]) => k !== 'website' && (Array.isArray(v) ? v.length : String(v ?? '').trim())).map(([k]) => k);
+  // Auto-pick a strategy from what we learned, so the owner goes straight to approving the email.
+  // The site's own offer and goal are kept over the play's generic ones; only the email, rhythm and
+  // visit flag come from the play. It can be changed on the next step.
+  const suggestion = suggestPlay({
+    name: String(answers.name ?? ''), offer: String(answers.offer ?? ''), why_us: String(answers.why_us ?? ''),
+    who: String(answers.who ?? ''), first_step: String(answers.first_step ?? ''), text: site.text,
+  });
+  answers.suggested_play = suggestion?.key ?? '';
+  if (suggestion) {
+    const applied = applyPlay(suggestion.key, { businessName: String(answers.name ?? '') });
+    if (applied) {
+      const keep = (k: string, fb: string) => (String(answers[k] ?? '').trim() ? answers[k] : fb);
+      Object.assign(answers, {
+        play: applied.play,
+        goal: keep('goal', applied.goal),
+        offer: keep('offer', applied.offer),
+        first_step: keep('first_step', applied.first_step),
+        claim_label: applied.claim_label,
+        visits: applied.visits ? 'yes' : (answers.visits || 'no'),
+        outreach_subject: applied.outreach_subject,
+        outreach_body: applied.outreach_body,
+        play_auto: '1',
+        play_reason: suggestion.reason,
+      });
+    }
+  }
   const id = (await query<{ id: number }>('INSERT INTO onboarding_drafts (website, answers, filled, used_ai) VALUES ($1, $2, $3, $4) RETURNING id',
     [site.url, JSON.stringify(answers), filled, Boolean(ai)])).rows[0].id;
   redirect(`/clients/new?draft=${id}`);

@@ -36,12 +36,12 @@ const site = http.createServer((req, res) => {
   await p.goto(base + '/clients/new');
   await p.fill('input[name=website]', 'http://127.0.0.1:3400/');
   await p.click('button:has-text("Read their website")');
-  // Pick a strategy (play) before the answer form appears; it fills the rhythm and the first email.
-  await p.waitForSelector('h1:has-text("Pick a strategy for Shine Cleaning")', { timeout: 60_000 });
-  await p.click('.play-card:has-text("Book a free walkthrough") button');
+  // The strategy is picked automatically from the website; the answer form appears directly.
   await p.waitForSelector('p.notice:has-text("Read http://127.0.0.1:3400/")', { timeout: 60_000 });
   const v = (n) => p.inputValue(`[name=${n}]`);
-  // The play set the first email and turned on visits.
+  // A cleaning site auto-picks the walkthrough play: it is marked, and the first email is filled.
+  if ((await p.inputValue('input[name=play]')) !== 'free_walkthrough') fail('cleaning site should auto-pick the walkthrough play');
+  if (!(await p.locator('.pill.from-site:has-text("Picked for you")').count())) fail('the auto-picked strategy should be marked');
   if (!(await v('outreach_subject')).trim() || !(await v('outreach_body')).includes('walkthrough')) fail('the play should fill the first email');
   if ((await v('name')) !== 'Shine Cleaning') fail(`name: ${await v('name')}`);
   if (!(await v('offer')).startsWith('Shine Cleaning does nightly office')) fail('offer not drafted');

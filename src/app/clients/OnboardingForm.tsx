@@ -6,12 +6,13 @@ import CopyButton from '../leads/CopyButton';
 type Answers = Record<string, unknown> & { objections?: { said: string; answer: string }[] };
 
 /** The questions to ask a business owner, with a field for each answer. */
-export default function OnboardingForm({ action, answers, editing, filled, fromSite }: {
+export default function OnboardingForm({ action, answers, editing, filled, fromSite, changeHref }: {
   action: (fd: FormData) => Promise<{ error?: string }>;
   answers?: Answers | null;
   editing: boolean;
   filled?: string[];  // answers drafted from their website
   fromSite?: boolean; // sign-up started from the website: ask the owner only what the site cannot say
+  changeHref?: string; // where "Change strategy" links, when a play was picked automatically
 }) {
   const sections = [...new Set(QUESTIONS.map((q) => q.section))];
   const asText = fromSite
@@ -49,8 +50,9 @@ export default function OnboardingForm({ action, answers, editing, filled, fromS
         {play ? (
           <fieldset className="card area">
             <legend>Strategy</legend>
-            <p style={{ margin: 0 }}><strong>{play.name}</strong></p>
-            <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{play.rhythm} You can change the goal in the answers above and the first email below.</p>
+            <p style={{ margin: 0 }}><strong>{play.name}</strong>{answers?.play_auto ? <span className="pill from-site" style={{ marginLeft: 8 }}>Picked for you</span> : null}</p>
+            {answers?.play_reason ? <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>Chosen because {String(answers.play_reason)}.</p> : null}
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{play.rhythm} You can change the goal in the answers above and the first email below.{changeHref ? <> <a href={changeHref}>Change strategy</a>.</> : null}</p>
             <input type="hidden" name="play" value={play.key} />
             <input type="hidden" name="claim_label" value={val('claim_label')} />
           </fieldset>

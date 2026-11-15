@@ -10,9 +10,9 @@ import ActionForm from '../../ActionForm';
 export const dynamic = 'force-dynamic';
 
 /** Adding a business: read their website, pick a strategy, then confirm answers and approve the email. */
-export default async function NewClientPage({ searchParams }: { searchParams: Promise<{ draft?: string; manual?: string }> }) {
+export default async function NewClientPage({ searchParams }: { searchParams: Promise<{ draft?: string; manual?: string; pick?: string }> }) {
   await requireOwner();
-  const { draft: draftId, manual } = await searchParams;
+  const { draft: draftId, manual, pick } = await searchParams;
   const terms = (await query<{ default_terms: Record<string, string> | null }>('SELECT default_terms FROM outreach_settings WHERE id = 1')).rows[0]?.default_terms ?? {};
   const draft = draftId && /^\d+$/.test(draftId)
     ? (await query<{ website: string; answers: Record<string, unknown>; filled: string[]; used_ai: boolean }>(
@@ -42,21 +42,22 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  // Step 2: website read but no strategy picked yet -> pick a play. It fills the goal, rhythm and email.
-  if (draft && !draft.answers?.play) {
+  // Step 2: no strategy yet (or the owner asked to change the auto-picked one) -> pick a play.
+  if (draft && (!draft.answers?.play || pick === '1')) {
     const name = String(draft.answers?.name ?? 'this business');
+    const recommended = String(draft.answers?.suggested_play ?? '');
     return (
       <>
-        <p><Link href="/clients/new">Start over</Link></p>
+        <p><Link href={pick === '1' ? `/clients/new?draft=${draftId}` : '/clients/new'}>{pick === '1' ? 'Keep the current strategy' : 'Start over'}</Link></p>
         <h1>Pick a strategy for {name}</h1>
         <p className="sub">
           This sets the goal, the call/email/visit rhythm, and writes the first email, all from their name. You tweak and approve the email on the next step, and you can change any of it later.
         </p>
         <div className="play-grid">
-          {PLAYS.map((p) => (
+          {[...PLAYS].sort((a, b) => Number(b.key === recommended) - Number(a.key === recommended)).map((p) => (
             <ActionForm key={p.key} action={applyPlayToDraft.bind(null, Number(draftId), p.key)}>
-              <section className="card play-card">
-                <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>{p.name}</h2>
+              <section className={`card play-card${p.key === recommended ? ' recommended' : ''}`}>
+                <h2 style={{ margin: '0 0 4px', fontSize: 17 }}>{p.name}{p.key === recommended && <span className="pill from-site" style={{ marginLeft: 8 }}>Recommended</span>}</h2>
                 <p className="muted" style={{ margin: '0 0 8px', fontSize: 13 }}>{p.best_for}</p>
                 <p style={{ margin: '0 0 12px', fontSize: 14 }}><strong>Rhythm:</strong> {p.rhythm}</p>
                 <button type="submit" className="secondary">Use this strategy</button>
@@ -83,7 +84,7 @@ export default async function NewClientPage({ searchParams }: { searchParams: Pr
           {draft.used_ai ? '' : ' (AI is not connected, so only the facts on the page)'}. Check each one, then review the first email at the bottom and set it up.
         </p>
       ) : <p className="sub">Answer these with the owner, pick a strategy, and review the first email. The system builds their searches and starts finding prospects for your reps.</p>}
-      <OnboardingForm action={saveOnboarding.bind(null, null)} editing={false} answers={answers} filled={draft?.filled} fromSite={Boolean(draft)} />
+      <OnboardingForm action={saveOnboarding.bind(null, null)} editing={false} answers={answers} filled={draft?.filled} fromSite={Boolean(draft)} changeHref={draft ? `/clients/new?draft=${draftId}&pick=1` : undefined} />
     </>
   );
 }

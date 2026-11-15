@@ -420,3 +420,6 @@ a.call svg, button.call svg { width: 16px; height: 16px; }
 .auto-hero .ah-mode .muted { font-size: 13px; }
 .auto-hero .segmented button.seg { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 14px; min-height: 40px; cursor: pointer; border-radius: 0; }
 .auto-hero .segmented button.seg[aria-current] { background: var(--accent); color: var(--accent-ink); }
+
+/* Onboarding: the auto-recommended play */
+.play-card.recommended { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
