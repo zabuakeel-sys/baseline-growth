@@ -89,10 +89,10 @@ export function messageFor(touch, { leadName, clientName, offer, need, senderNam
   const what = offer ? `${offer.trim().replace(/[.\s]+$/, '')}.` : `I work with ${clientName}.`;
   const fit = need ? ` I thought it could help with ${midSentence(need)}.` : '';
   const bodies = [
-    `${hi}\n\n${personal ? `${personal.trim()} ` : ''}I'm reaching out on behalf of ${clientName}. ${what}${fit}\n\nWould a 10-minute call this week be worth it to see if it fits?`,
-    `${hi}\n\nFollowing up on my note about ${clientName}. Is this something you handle, or is there someone better to talk to?`,
-    `${hi}\n\nOne more try in case my last message got buried. Happy to send a short summary by email instead of a call. Would that help?`,
-    `${hi}\n\nI'll stop here so I'm not cluttering your inbox. If ${clientName} is ever useful to you, just reply and I'll pick it up.`,
+    `${hi}\n\n${personal ? `${personal.trim()} ` : ''}I'm reaching out on behalf of ${clientName}. ${what}${fit}\n\nWorth a quick look? Ten minutes and you'll know if it's useful.`,
+    `${hi}\n\nCircling back on ${clientName}. Quick question: is this something you handle, or is there a better person for me to talk to?`,
+    `${hi}\n\nLast note from me for now: if ${clientName} could be worth a short call, I'll keep it brief and work around your schedule. If the timing is off, just say so.`,
+    `${hi}\n\nI'll leave it here so I'm not cluttering your inbox. If ${clientName} is ever useful, reply and I'll pick it straight back up.`,
   ];
   return bodies[Math.min(touch, bodies.length - 1)] + signOff({ clientName, senderName, address });
 }

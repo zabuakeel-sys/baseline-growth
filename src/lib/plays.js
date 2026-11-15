@@ -21,13 +21,11 @@ export const PLAYS = [
     subject: 'Claim your free {business} listing',
     body: `Hi {first_name},
 
-{business} is a free way for local customers to find and book {name}. Your listing is ready, it just needs you to claim it, and there is no cost to do so.
+When someone near {city} looks for a business like {name} on {business}, your listing should be the one they book. It is built and ready, claiming it is free, and once it is live those customers can reach you directly.
 
-Claim yours here: [claim your free listing]
+Claim {name}'s listing here: [claim your free listing]
 
-Once it is claimed, anyone using {business} can find {name} and book you directly.
-
-If someone else handles this, feel free to pass it along.`,
+Two minutes, no cost. If someone else handles this, feel free to forward it.`,
   },
   {
     key: 'free_walkthrough',
@@ -42,11 +40,11 @@ If someone else handles this, feel free to pass it along.`,
     subject: 'A free walkthrough for {name}',
     body: `Hi {first_name},
 
-I reach out on behalf of {business}. We would like to offer {name} a free walkthrough and quote, with no obligation, so you can see exactly what it would look like and what it would cost.
+The simplest way to see whether {business} is worth it for {name} is to let us look at your space and put real numbers in front of you, free and with no obligation. No hard sell, just what we would do and what it would cost next to what you pay now.
 
-Book a time that suits you here: [book your free walkthrough]
+Grab a time that suits you: [book your free walkthrough]
 
-If there is a better person to talk to about this, please point me their way.`,
+If there is a better person to talk to about this, point me their way.`,
   },
   {
     key: 'free_quote',
@@ -61,7 +59,7 @@ If there is a better person to talk to about this, please point me their way.`,
     subject: 'A quick quote for {name}',
     body: `Hi {first_name},
 
-I reach out on behalf of {business}. If it is useful, we can put together a free, no-pressure quote for {name}.
+If you are open to it, I will put together a straight, no-pressure quote from {business} for {name}, so you have a real number to weigh against what you pay now. Free, and no obligation to go further.
 
 Request yours here: [get your free quote]
 
@@ -80,9 +78,9 @@ Not the right person? Feel free to forward this along.`,
     subject: 'A quick look at {business} for {name}',
     body: `Hi {first_name},
 
-I'm with {business}, and I think what we do could be a good fit for {name}. The easiest way to tell is a short demo, no slides, just the parts that matter to you.
+I will keep this short. {business} helps businesses like {name}, and the fastest way to tell if it fits is ten minutes where I show you only the parts that matter to you, no slides.
 
-Grab a time that works: [book a demo]
+Pick a time that works: [book a demo]
 
 If someone else would be the right person to show this to, point me their way.`,
   },
@@ -99,7 +97,7 @@ If someone else would be the right person to show this to, point me their way.`,
     subject: 'A free trial of {business} for {name}',
     body: `Hi {first_name},
 
-I'm with {business}. If it's useful, {name} can try it free, no card and no commitment, and see for yourself whether it helps.
+No pitch needed. {name} can try {business} free, with no card and no commitment, and decide for yourself. If it helps you will know quickly, and if not you have lost nothing.
 
 Start whenever you like: [start a free trial]
 
@@ -118,7 +116,7 @@ Not the right person? Feel free to forward this along.`,
     subject: 'A free consult for {name}',
     body: `Hi {first_name},
 
-I'm with {business}. I'd be glad to set up a short, free consultation for {name}, no obligation, to talk through where we might help and whether it's worth going further.
+Worth a short, free call? I would walk through where {business} could help {name} and give you a straight answer on whether it is worth taking further, with no obligation either way.
 
 Book a time that suits you: [book a consultation]
 
@@ -137,7 +135,7 @@ If there's a better person for this, point me their way and I'll reach out to th
     subject: 'A sample for {name}',
     body: `Hi {first_name},
 
-I'm with {business}. If it's useful, I'd be glad to get a free sample to {name} so you can try it before deciding anything, no obligation.
+The easiest way to judge {business} is to try it. I'd be glad to get {name} a free sample, no strings, so you can see the quality for yourself before any talk of ordering.
 
 Let me know the best way to get it to you, or grab a time here: [get a free sample]
 
@@ -156,7 +154,7 @@ If someone else handles buying, feel free to pass this along.`,
     subject: 'Wholesale pricing for {name}',
     body: `Hi {first_name},
 
-I'm with {business}. We supply businesses like {name}, and opening a wholesale account is free and gets you our trade pricing, with no commitment to order.
+If {name} buys this kind of product, a free wholesale account with {business} gets you our trade pricing with no commitment to order, so you can see the real numbers and decide for yourself.
 
 You can set it up here: [see wholesale pricing]
 

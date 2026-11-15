@@ -20,7 +20,7 @@ export function channelMoves(ctx = {}) {
     channel: 'linkedin',
     when: 'Day 1, after the first email',
     title: `Connect with ${who} on LinkedIn`,
-    message: `Hi ${first}, I work with ${business} and we help businesses like ${name}. Thought it would be good to connect.`,
+    message: `Hi ${first}, I work with ${business} and help businesses like ${name}. Worth a quick connect to see if it's a fit?`,
     link: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent([contactName, name].filter(Boolean).join(' '))}`,
     linkLabel: 'Find them on LinkedIn',
   });
