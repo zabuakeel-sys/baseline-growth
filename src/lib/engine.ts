@@ -14,8 +14,9 @@ import { draftReply, writeOutreachEmail } from './coach';
 import { cityOf } from './leads';
 import { today } from './work';
 import { runAutopilot } from './autopilotRun';
+import { enrichConfigured, enrichDueLeads } from './enrich';
 
-export type Settings = { auto_send: boolean; daily_limit: number; start_hour: number; end_hour: number; last_run_at: string | null; last_error: string; max_searches_per_day: number; last_autopilot: string };
+export type Settings = { auto_send: boolean; daily_limit: number; start_hour: number; end_hour: number; last_run_at: string | null; last_error: string; max_searches_per_day: number; last_autopilot: string; enrich_daily_limit: number };
 
 export async function getSettings() {
   return (await query<Settings>('SELECT * FROM outreach_settings WHERE id = 1')).rows[0];
@@ -324,6 +325,15 @@ export async function runOutreach(now = new Date()): Promise<RunReport | null> {
             [`${new Date().toISOString()}|${a.searches}|${a.added}|${a.notes.join('; ')}`]);
         } catch (err) {
           notes.push(`Autopilot failed: ${(err as Error).message}`);
+        }
+        // Find who to contact at newly added prospects, within the daily cap (uses Hunter/Apollo credits).
+        if (enrichConfigured()) {
+          try {
+            const e = await enrichDueLeads();
+            if (e.note) notes.push(e.note);
+          } catch (err) {
+            notes.push(`Contact lookup failed: ${(err as Error).message}`);
+          }
         }
         // Emails queue only for clients with a mailbox (theirs or the shared one); calls and visits always.
         const queued = await queueDue(settings);

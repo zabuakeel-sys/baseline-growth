@@ -48,6 +48,9 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
         </span>
       </header>
       {lead.need && <p className="lead-need">{lead.need}</p>}
+      {lead.contact_name && (
+        <p className="task-meta" style={{ margin: '4px 0' }}>Ask for <strong>{lead.contact_name}</strong>{lead.contact_title ? `, ${lead.contact_title}` : ''}</p>
+      )}
       {lead.status !== 'opted_out' && (
         <p className="task-meta" style={{ margin: '4px 0' }}>
           {lead.phone && <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}>{lead.phone}</a>}

@@ -67,9 +67,9 @@ export async function addCandidates(ids: number[], assign: (clientId: number) =>
     if (optedOut.rowCount) { blocked++; await query("UPDATE candidates SET status = 'skipped' WHERE id = $1", [c.id]); continue; }
     const notes = [c.about, c.website].filter(Boolean).join('\n');
     const lead = await query<{ id: number }>(
-      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address, rating, reviews)
-       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8, $9, $10) RETURNING id`,
-      [c.client_id, c.name, c.phone, c.email, notes, today(), assign(c.client_id), c.address, c.rating, c.reviews]);
+      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address, rating, reviews, website)
+       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+      [c.client_id, c.name, c.phone, c.email, notes, today(), assign(c.client_id), c.address, c.rating, c.reviews, c.website]);
     await query("UPDATE candidates SET status = 'added', lead_id = $2 WHERE id = $1", [c.id, lead.rows[0].id]);
     added++;
   }

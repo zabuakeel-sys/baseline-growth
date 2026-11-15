@@ -167,6 +167,7 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
   try { if (website) host = new URL(website).host.replace(/^www\./, ''); } catch { /* ignore */ }
   const last = lead.activity[0];
   const research: [string, ReactNode][] = [];
+  if (lead.contact_name) research.push(['Who to contact', `${lead.contact_name}${lead.contact_title ? ` · ${lead.contact_title}` : ''}`]);
   if (lead.rating || lead.reviews) research.push(['Reputation', `${lead.rating ? `${lead.rating}★` : ''}${lead.rating && lead.reviews ? ' · ' : ''}${lead.reviews ? `${lead.reviews} reviews` : ''}`]);
   if (about) research.push(['About them', about.slice(0, 280)]);
   if (website) research.push(['Website', <a key="w" href={website} target="_blank" rel="noreferrer">{host || website}</a>]);
