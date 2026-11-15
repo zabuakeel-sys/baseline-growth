@@ -7,6 +7,18 @@ export const REFRESH_DAYS = 30;
 /** Fit score a business needs to be added without a person looking at it. */
 export const AUTO_ADD_SCORE = 60;
 
+/**
+ * Marketplaces want exactly the shops that score low on the usual signals: no website yet, few
+ * reviews. The play's fit boost lifts them, but they still land under the normal floor, so a
+ * listing client uses a lower one. They must still have a phone or email to be reachable.
+ */
+export const MARKETPLACE_ADD_SCORE = 45;
+
+/** The auto-add floor for a client, by its play. */
+export function addFloorFor(play) {
+  return play === 'claim_listing' ? MARKETPLACE_ADD_SCORE : AUTO_ADD_SCORE;
+}
+
 const daysAgo = (iso, today) => Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${iso.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
 
 /** The next search to run: never-run ones first (oldest added), then the stalest past the refresh window. */

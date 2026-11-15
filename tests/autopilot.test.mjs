@@ -37,3 +37,16 @@ test('only good, reachable businesses are added automatically, best first', () =
   ];
   assert.deepEqual(autoAddable(c).map((x) => x.id), [1, 4]);
 });
+
+import { addFloorFor, AUTO_ADD_SCORE, MARKETPLACE_ADD_SCORE } from '../src/lib/autopilot.js';
+
+test('marketplace clients use a lower auto-add floor so low-presence shops come through', () => {
+  assert.equal(addFloorFor('claim_listing'), MARKETPLACE_ADD_SCORE);
+  assert.equal(addFloorFor('free_walkthrough'), AUTO_ADD_SCORE);
+  assert.equal(addFloorFor(''), AUTO_ADD_SCORE);
+  assert.ok(MARKETPLACE_ADD_SCORE < AUTO_ADD_SCORE);
+  // A no-website shop that scored 59 (Gearhead) is added for a marketplace, not for others.
+  const gearhead = [{ id: 1, score: 59, email: '', phone: '3135550300' }];
+  assert.equal(autoAddable(gearhead, addFloorFor('claim_listing')).length, 1);
+  assert.equal(autoAddable(gearhead, addFloorFor('free_walkthrough')).length, 0);
+});

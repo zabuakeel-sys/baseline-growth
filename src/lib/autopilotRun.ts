@@ -1,7 +1,7 @@
 // Autopilot: for every business it is on for, keeps each rep supplied with fresh prospects.
 // Runs inside the background outreach run (every 5 minutes) and from "Run now".
 import { query } from './db';
-import { autoAddable, dueTarget, pickRep, prospectsToAdd } from './autopilot';
+import { autoAddable, addFloorFor, dueTarget, pickRep, prospectsToAdd } from './autopilot';
 import { addCandidates, runSearch } from './finderRun';
 import { placesConfigured } from './places';
 import { today } from './work';
@@ -15,8 +15,8 @@ export type AutopilotReport = { searches: number; added: number; notes: string[]
 
 export async function runAutopilot(): Promise<AutopilotReport> {
   const report: AutopilotReport = { searches: 0, added: 0, notes: [] };
-  const clients = (await query<{ id: number; name: string; daily_prospects: number }>(
-    "SELECT id, name, daily_prospects FROM clients WHERE autopilot AND status <> 'ended' AND daily_prospects > 0 ORDER BY id")).rows;
+  const clients = (await query<{ id: number; name: string; daily_prospects: number; play: string }>(
+    "SELECT id, name, daily_prospects, play FROM clients WHERE autopilot AND status <> 'ended' AND daily_prospects > 0 ORDER BY id")).rows;
   if (!clients.length) return report;
 
   // Reps get the prospects; with no reps yet, the owners do.
@@ -50,7 +50,7 @@ export async function runAutopilot(): Promise<AutopilotReport> {
     if (want <= 0) continue;
 
     const loadPool = async () => autoAddable((await query<{ id: number; score: number; email: string; phone: string }>(
-      "SELECT id, score, email, phone FROM candidates WHERE client_id = $1 AND status = 'found'", [client.id])).rows);
+      "SELECT id, score, email, phone FROM candidates WHERE client_id = $1 AND status = 'found'", [client.id])).rows, addFloorFor(client.play));
     let pool = await loadPool();
     while (pool.length < want && canSearch && searchesLeft > 0) {
       const targets = (await query<{ id: number; last_run_at: string | null }>(
