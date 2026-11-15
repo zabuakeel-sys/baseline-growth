@@ -7,6 +7,7 @@ import { routeLink } from '@/lib/playbook';
 import { bestCallTime } from '@/lib/calltime';
 import { fitReasons } from '@/lib/finder';
 import { channelMoves } from '@/lib/moves';
+import { isWarm, warmSource, warmFirst } from '@/lib/warm';
 import CopyButton from '../leads/CopyButton';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
@@ -101,6 +102,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       <Link className="lead-row" href={`/next?${qp({ lead: String(l.id) })}`}>
         <span className="d" style={{ background: dotColor(r) }}></span>
         <div className="lr-main"><div className="lr-name">{l.name}</div><div className="lr-ctx">{ctx(l)}</div></div>
+        {isWarm(l) && <span className="lr-tag warm">Warm</span>}
         <span className={`lr-tag r-${r}`}>{REASON[r]}</span>
         <span className="chev">›</span>
       </Link>
@@ -162,7 +164,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           {businesses.map((b, i) => (
             <section className="card biz-day" key={i}>
               {!clientId && <div className="bd-head"><h2>{b.name}</h2><span className="bd-n">{b.rows.length + b.asks.length}</span></div>}
-              {b.rows.map((l) => <Row key={l.id} l={l} />)}
+              {warmFirst(b.rows).map((l) => <Row key={l.id} l={l} />)}
               {b.asks.map((a) => (
                 <Link className="lead-row" key={`a${a.id}`} href={`/next?${qp({ ask: String(a.id) })}`}>
                   <span className="d" style={{ background: 'var(--good)' }}></span>
@@ -204,6 +206,7 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
   try { if (website) host = new URL(website).host.replace(/^www\./, ''); } catch { /* ignore */ }
   const last = lead.activity[0];
   const research: [string, ReactNode][] = [];
+  if (isWarm(lead)) research.push(['Warm intro', warmSource(lead)]);
   const fits = fitReasons({ website: lead.website, phone: lead.phone, address: lead.address, rating: lead.rating, reviews: lead.reviews }, lead.client_play);
   if (fits.length) research.push(['Why a good fit', fits[0].charAt(0).toUpperCase() + fits[0].slice(1)]);
   if (lead.contact_name) research.push(['Who to contact', `${lead.contact_name}${lead.contact_title ? ` · ${lead.contact_title}` : ''}`]);

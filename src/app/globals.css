@@ -423,3 +423,6 @@ a.call svg, button.call svg { width: 16px; height: 16px; }
 
 /* Onboarding: the auto-recommended play */
 .play-card.recommended { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Warm leads (referrals, partner intros) */
+.lr-tag.warm { background: var(--warn-soft); color: var(--warn); }
