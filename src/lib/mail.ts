@@ -161,15 +161,11 @@ export async function sendMail(
   // A standards-compliant unsubscribe path. Mailbox providers (Gmail, Yahoo) treat its presence as a
   // trust signal and are less likely to spam-file the sender; it points at the real reply-to opt-out.
   const unsubAddr = account.from.match(/<([^>]+)>/)?.[1] ?? account.from.trim();
-  const info = await (await transportFor(account)).sendMail({
+  await (await transportFor(account)).sendMail({
     from: account.from, to: m.to, cc: m.cc, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), messageId,
     headers: { 'List-Unsubscribe': `<mailto:${unsubAddr}?subject=unsubscribe>` },
     ...(m.inReplyTo ? { inReplyTo: m.inReplyTo, references: m.inReplyTo } : {}),
   });
-  if (process.env.MAIL_DEBUG === 'on') {
-    const i = info as { accepted?: unknown[]; rejected?: unknown[]; response?: string };
-    console.log(`[mail-debug] sent from=${account.from} to=${m.to} id=${messageId} accepted=${JSON.stringify(i.accepted ?? [])} rejected=${JSON.stringify(i.rejected ?? [])} response=${JSON.stringify(i.response ?? '')}`);
-  }
   return messageId;
 }
 
