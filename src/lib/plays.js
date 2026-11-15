@@ -67,6 +67,101 @@ Request yours here: [get your free quote]
 
 Not the right person? Feel free to forward this along.`,
   },
+  {
+    key: 'free_demo',
+    name: 'Book a free demo',
+    best_for: 'Software and apps sold to businesses: booking, scheduling, POS, CRM and the like.',
+    rhythm: 'Email and calls, no in-person visits. A short demo is the goal.',
+    visits: false,
+    goal: 'Get the decision-maker at each business to book a short, free demo of {business}.',
+    offer: 'A short, free demo of {business}, at a time that suits you.',
+    first_step: 'free demo',
+    claim_label: 'Book a demo',
+    subject: 'A quick look at {business} for {name}',
+    body: `Hi {first_name},
+
+I'm with {business}, and I think what we do could be a good fit for {name}. The easiest way to tell is a short demo, no slides, just the parts that matter to you.
+
+Grab a time that works: [book a demo]
+
+If someone else would be the right person to show this to, point me their way.`,
+  },
+  {
+    key: 'free_trial',
+    name: 'Start a free trial',
+    best_for: 'Self-serve software and online tools a business can try on its own.',
+    rhythm: 'Email and calls, no in-person visits. The goal is to get them trying it, not a meeting.',
+    visits: false,
+    goal: 'Get each business to start a free trial of {business}.',
+    offer: 'A free trial of {business}, no card required.',
+    first_step: 'free trial',
+    claim_label: 'Start a free trial',
+    subject: 'A free trial of {business} for {name}',
+    body: `Hi {first_name},
+
+I'm with {business}. If it's useful, {name} can try it free, no card and no commitment, and see for yourself whether it helps.
+
+Start whenever you like: [start a free trial]
+
+Not the right person? Feel free to forward this along.`,
+  },
+  {
+    key: 'free_consultation',
+    name: 'Offer a free consultation',
+    best_for: 'Professional services sold to businesses: accounting, legal, marketing, IT, HR, insurance.',
+    rhythm: 'Email and calls, no in-person visits. A short call is the goal.',
+    visits: false,
+    goal: 'Get the decision-maker at each business to book a free, no-obligation consultation with {business}.',
+    offer: 'A free, no-obligation consultation with {business}.',
+    first_step: 'free consultation',
+    claim_label: 'Book a consultation',
+    subject: 'A free consult for {name}',
+    body: `Hi {first_name},
+
+I'm with {business}. I'd be glad to set up a short, free consultation for {name}, no obligation, to talk through where we might help and whether it's worth going further.
+
+Book a time that suits you: [book a consultation]
+
+If there's a better person for this, point me their way and I'll reach out to them.`,
+  },
+  {
+    key: 'free_sample',
+    name: 'Send a free sample',
+    best_for: 'Suppliers selling to businesses: food and drink, products, materials a buyer wants to try.',
+    rhythm: 'Email, calls, and a visit to drop samples when the prospect is nearby.',
+    visits: true,
+    goal: 'Get the buyer at each business to accept a free sample from {business}.',
+    offer: 'A free sample from {business}, no obligation.',
+    first_step: 'free sample',
+    claim_label: 'Get a free sample',
+    subject: 'A sample for {name}',
+    body: `Hi {first_name},
+
+I'm with {business}. If it's useful, I'd be glad to get a free sample to {name} so you can try it before deciding anything, no obligation.
+
+Let me know the best way to get it to you, or grab a time here: [get a free sample]
+
+If someone else handles buying, feel free to pass this along.`,
+  },
+  {
+    key: 'wholesale_account',
+    name: 'Open a wholesale account',
+    best_for: 'Wholesalers and distributors offering trade pricing to shops, restaurants and resellers.',
+    rhythm: 'Email and calls, with a visit when the prospect is nearby.',
+    visits: true,
+    goal: 'Get the buyer at each business to open a free wholesale account with {business} and see trade pricing.',
+    offer: 'A free wholesale account with {business} and access to trade pricing.',
+    first_step: 'wholesale account',
+    claim_label: 'See wholesale pricing',
+    subject: 'Wholesale pricing for {name}',
+    body: `Hi {first_name},
+
+I'm with {business}. We supply businesses like {name}, and opening a wholesale account is free and gets you our trade pricing, with no commitment to order.
+
+You can set it up here: [see wholesale pricing]
+
+If there's a better person to talk to about buying, point me their way.`,
+  },
 ];
 
 export const PLAY_KEYS = PLAYS.map((p) => p.key);

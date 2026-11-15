@@ -10,7 +10,17 @@ test('every play has the fields a business needs and a send-ready email', () => 
     }
     assert.equal(typeof p.visits, 'boolean');
     // The email must carry a claim/booking link placeholder for the booking URL to drop in.
-    assert.match(p.body, /\[[^\]]*\b(claim|book|get|request)\b[^\]]*\]/i, `${p.key} email has no claim link placeholder`);
+    assert.match(p.body, /\[[^\]]*\b(claim|book|get|request|start|see)\b[^\]]*\]/i, `${p.key} email has no booking link placeholder`);
+  }
+});
+
+test('every play fills to a clean, send-ready email (no leftover placeholders)', () => {
+  for (const p of PLAYS) {
+    const r = applyPlay(p.key, { businessName: 'Acme Co' });
+    const sent = fillEmail(r.outreach_body, { firstName: 'Sam', name: "Al's Shop", city: 'Troy', clientName: 'Acme Co', claimUrl: 'https://acme.example/go', address: '1 Main St, Troy, MI' });
+    assert.ok(!/\{|\[/.test(sent), `${p.key} left a placeholder: ${sent}`);
+    assert.ok(sent.includes('https://acme.example/go'), `${p.key} dropped the booking link`);
+    assert.ok(!sent.includes('{business}') && sent.includes('Acme Co'), `${p.key} business name not filled`);
   }
 });
 

@@ -132,7 +132,7 @@ export function fillEmail(text, { firstName = '', name = '', city = '', clientNa
   sub(/\[\s*(shop(\s*name)?|business\s*name|their\s*name|prospect)\s*\]|\{\s*(shop|shop_name|prospect)\s*\}/gi, name || first);
   sub(/\[\s*city\s*\]|\{\s*city\s*\}/gi, city || 'your area');
   sub(/\[\s*(platform|our\s*(app|platform|product|service)|company|client)\s*\]|\{\s*(platform|business|company|client)\s*\}/gi, clientName || '');
-  sub(/\[[^\]]*\bclaim\b[^\]]*\]|\{\s*(claim(_?link)?|link|url)\s*\}/gi, claimUrl || '');
+  sub(/\[[^\]]*\b(claim|book|get|request|start|see|try|schedule|reserve|grab|open)\b[^\]]*\]|\{\s*(claim(_?link)?|link|url)\s*\}/gi, claimUrl || '');
   sub(/\[[^\]]*\b(mailing\s*)?address\b[^\]]*\]|\{\s*(mailing_?)?address\s*\}/gi, (address || '').trim());
   sub(/\[[^\]]*\bunsubscribe\b[^\]]*\]|\{\s*unsubscribe\s*\}|\[[^\]]*\bopt[\s-]?out\b[^\]]*\]/gi, OPT_OUT_LINE);
   sub(/\{\s*name\s*\}/gi, name || first);
