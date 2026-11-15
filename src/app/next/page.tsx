@@ -6,6 +6,8 @@ import { nextQueue, reasonFor } from '@/lib/queue';
 import { routeLink } from '@/lib/playbook';
 import { bestCallTime } from '@/lib/calltime';
 import { fitReasons } from '@/lib/finder';
+import { channelMoves } from '@/lib/moves';
+import CopyButton from '../leads/CopyButton';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
 import { addReferrals } from '../tools/actions';
@@ -238,6 +240,24 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
         {reason === 'visit' && directions && <a className="button secondary" href={directions} target="_blank" rel="noreferrer">Directions</a>}
         <Link className="button secondary" href={`/call/${lead.id}?from=next`}>Listen and coach me</Link>
       </div>
+
+      <details className="card moves" style={{ marginTop: 16 }}>
+        <summary><strong>Reach them another way</strong> <span className="muted">· LinkedIn, mail, text, a gift</span></summary>
+        <ul className="plain-list" style={{ marginTop: 8 }}>
+          {channelMoves({ play: lead.client_play, business: lead.client_name, name: lead.name, contactName: lead.contact_name, offer: lead.client_offer, phone: lead.phone, address: lead.address }).map((m, i) => (
+            <li key={i} style={{ padding: '10px 0' }}>
+              <div><strong>{m.title}</strong> <span className="muted">· {m.when}</span></div>
+              <pre className="message" style={{ margin: '6px 0' }}>{m.message}</pre>
+              <div className="actions" style={{ gap: 8 }}>
+                {m.link && <a className="button secondary small" href={m.link} target="_blank" rel="noreferrer">{m.linkLabel}</a>}
+                {m.sms && <a className="button secondary small" href={`sms:${m.sms}?&body=${encodeURIComponent(m.message)}`}>Open a text</a>}
+                <CopyButton text={m.copy || m.message} />
+              </div>
+              {m.caution && <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>{m.caution}</p>}
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <div className="divline"></div>
       <div className="ol">Log what happened — you go back to the list.</div>
