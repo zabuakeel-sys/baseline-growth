@@ -256,32 +256,3 @@ export function explainMailError(msg: string) {
   if (/535.*5\.7\.8|BadCredentials/i.test(msg)) return `${msg} For Google, use an app password, not the normal one.`;
   return msg;
 }
-
-/**
- * Temporary boot-time diagnostic for the shared mailbox, gated behind MAIL_DEBUG=on.
- * Logs only non-secret facts (never the password): whether sending/reading authenticate,
- * the login name, and the password's length and shape, so a bad app password can be told
- * apart from a wrong account or 2-Step being off. Remove once the mailbox is confirmed.
- */
-export async function diagnoseSharedMailbox(): Promise<void> {
-  const a = sharedAccount();
-  if (!a) { console.log('[mail-debug] shared mailbox not configured (missing OUTREACH_FROM/SMTP_HOST/SMTP_USER/SMTP_PASS)'); return; }
-  const pass = a.smtp.pass;
-  const facts = {
-    from: a.from,
-    smtpUser: a.smtp.user,
-    userMatchesFrom: addressOfFrom(a.from).toLowerCase() === a.smtp.user.trim().toLowerCase(),
-    smtpHost: a.smtp.host, smtpPort: a.smtp.port, smtpSecure: a.smtp.secure,
-    passLength: pass.length,
-    passHasSpace: /\s/.test(pass),
-    passNonAlnum: /[^a-zA-Z0-9]/.test(pass),
-    imapConfigured: Boolean(a.imap),
-  };
-  console.log('[mail-debug] shared mailbox config:', JSON.stringify(facts));
-  try {
-    await (await transportFor(a)).verify();
-    console.log('[mail-debug] SMTP login: OK');
-  } catch (err) {
-    console.log('[mail-debug] SMTP login FAILED:', (err as Error).message);
-  }
-}
