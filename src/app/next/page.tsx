@@ -4,10 +4,12 @@ import { query } from '@/lib/db';
 import { leadsForDay, referralAsksDue, cityOf } from '@/lib/leads';
 import { nextQueue, reasonFor } from '@/lib/queue';
 import { routeLink } from '@/lib/playbook';
+import { bestCallTime } from '@/lib/calltime';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
 import { addReferrals } from '../tools/actions';
 import ActionForm from '../ActionForm';
+import VisitRoute from './VisitRoute';
 import type { ReactNode } from 'react';
 import type { Lead } from '@/lib/leads';
 
@@ -39,7 +41,9 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const clientName = clientId ? (mine[0]?.client_name ?? (await query<{ name: string }>('SELECT name FROM clients WHERE id = $1', [clientId])).rows[0]?.name ?? 'this business') : '';
   const queue = nextQueue(mine, now);
 
-  const [meetings, allAsks] = await Promise.all([
+  const whoFilter = everyone ? '' : `AND (l.assignee_id = ${user.id} OR l.assignee_id IS NULL)`;
+  const clientFilter = clientId ? `AND l.client_id = ${clientId}` : '';
+  const [meetings, allAsks, sends] = await Promise.all([
     query<{ id: number; lead_id: number; lead_name: string; client_name: string; starts_at: string; kind: string; location: string; phone: string }>(
       `SELECT m.id, m.lead_id, l.name AS lead_name, c.name AS client_name, to_char(m.starts_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS starts_at, m.kind, m.location, l.phone
        FROM meetings m JOIN leads l ON l.id = m.lead_id JOIN clients c ON c.id = l.client_id
@@ -47,7 +51,19 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
          ${everyone ? '' : 'AND (m.booked_by = $2 OR l.assignee_id = $2)'} ORDER BY m.starts_at`,
       everyone ? [now] : [now, user.id]).then((r) => r.rows),
     clientId ? Promise.resolve([] as Lead[]) : referralAsksDue(everyone ? null : user.id),
+    // What emails went out, for this rep's prospects (or everyone), most recent first.
+    query<{ lead_name: string; client_name: string; touch: number | null; sent_at: string }>(
+      `SELECT l.name AS lead_name, c.name AS client_name, o.touch,
+         to_char(o.sent_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS sent_at
+       FROM outbox o JOIN leads l ON l.id = o.lead_id JOIN clients c ON c.id = l.client_id
+       WHERE o.status = 'sent' ${clientFilter} ${whoFilter}
+       ORDER BY o.sent_at DESC LIMIT 25`).then((r) => r.rows),
   ]);
+  const sentToday = sends.filter((s) => s.sent_at && new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date(s.sent_at)) === now).length;
+  // Today's visits, grouped by city so the route does not zig-zag, for the "plan my route" button.
+  const visitStops = [...queue.filter((l) => reasonFor(l, now) === 'visit' && l.address)]
+    .sort((a, b) => (cityOf(a.address) || '').localeCompare(cityOf(b.address) || ''))
+    .map((l) => l.address);
 
   const qp = (extra: Record<string, string>) => {
     const p = new URLSearchParams(extra);
@@ -106,6 +122,13 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       </div>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
+      {!focusLead && !focusAsk && visitStops.length > 0 && (
+        <div className="route-bar">
+          <VisitRoute addresses={visitStops} />
+          <span className="muted">Drives from where you are now through today&apos;s {visitStops.length} visit{visitStops.length === 1 ? '' : 's'}.</span>
+        </div>
+      )}
+
       {!focusLead && !focusAsk && !clientId && meetings.length > 0 && (
         <div className="card meetings-today" style={{ marginBottom: 20 }}>
           <strong>Meetings today</strong>
@@ -151,6 +174,19 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           ))}
         </>
       )}
+
+      {!focusLead && !focusAsk && sends.length > 0 && (
+        <details className="card emails-out">
+          <summary>Emails that went out <span className="muted">· {sentToday} today, {sends.length} recent</span></summary>
+          <ul className="plain-list" style={{ marginTop: 8 }}>
+            {sends.map((s, i) => (
+              <li key={i} style={{ padding: '6px 0' }}>
+                <strong>{s.lead_name}</strong> <span className="muted">· {s.client_name} · {s.touch === null ? 'reply' : s.touch === 0 ? 'first email' : `follow-up ${s.touch}`} · {time(s.sent_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -168,6 +204,10 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
   const last = lead.activity[0];
   const research: [string, ReactNode][] = [];
   if (lead.contact_name) research.push(['Who to contact', `${lead.contact_name}${lead.contact_title ? ` · ${lead.contact_title}` : ''}`]);
+  if (reason !== 'visit') {
+    const ct = bestCallTime({ name: lead.name, need: lead.need, notes: lead.notes });
+    research.push(['Best time to call', `${ct.when}. Avoid ${ct.avoid}.`]);
+  }
   if (lead.rating || lead.reviews) research.push(['Reputation', `${lead.rating ? `${lead.rating}★` : ''}${lead.rating && lead.reviews ? ' · ' : ''}${lead.reviews ? `${lead.reviews} reviews` : ''}`]);
   if (about) research.push(['About them', about.slice(0, 280)]);
   if (website) research.push(['Website', <a key="w" href={website} target="_blank" rel="noreferrer">{host || website}</a>]);

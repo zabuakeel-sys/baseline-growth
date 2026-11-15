@@ -5,6 +5,7 @@ import { markCustomer, markIntroduced, markLost, markOptedOut, markReplied, mark
 import ActionForm from '../ActionForm';
 import CopyButton from './CopyButton';
 import { handOverLead } from '../outbox/actions';
+import { bestCallTime } from '@/lib/calltime';
 import SalesTools from '../sales/SalesTools';
 
 const shortDate = (iso: string) =>
@@ -57,6 +58,9 @@ export default function LeadCard({ lead, back, senderName, today, showClient }: 
           {lead.phone && lead.email && ' · '}
           {lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}
         </p>
+      )}
+      {lead.phone && !closed && (
+        <p className="task-meta" style={{ margin: '4px 0' }}>Best time to call: {bestCallTime({ name: lead.name, need: lead.need, notes: lead.notes }).when}</p>
       )}
 
       {lead.last_reply && lead.last_reply_kind !== 'bounce' && (

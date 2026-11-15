@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { getLead } from '@/lib/leads';
 import { brief } from '@/lib/playbook';
+import { bestCallTime } from '@/lib/calltime';
 import { coachConfigured } from '@/lib/coach';
 import { logActivity } from '../../sales/actions';
 import CallAssistant from '../CallAssistant';
@@ -29,6 +30,9 @@ export default async function CallPage({ params, searchParams }: { params: Promi
         {lead.phone && <> · <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}>{lead.phone}</a></>}
         {' · '}put the call on speaker near this device.
       </p>
+      {(() => { const ct = bestCallTime({ name: lead.name, need: lead.need, notes: lead.notes }); return (
+        <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>Best time to call: {ct.when}. Avoid {ct.avoid}.</p>
+      ); })()}
       {saved && <p className="notice" role="status">{saved}. <Link href="/next">Back to Next up</Link></p>}
       <ul className="brief" aria-label="Brief" style={{ marginBottom: 16 }}>
         {brief(lead as unknown as Record<string, unknown>).map((l, i) => <li key={i}>{l}</li>)}
