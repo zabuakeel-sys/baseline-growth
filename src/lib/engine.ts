@@ -15,6 +15,7 @@ import { cityOf } from './leads';
 import { today } from './work';
 import { runAutopilot } from './autopilotRun';
 import { enrichConfigured, enrichDueLeads } from './enrich';
+import { geocodeDueLeads } from './geocode';
 
 export type Settings = { auto_send: boolean; daily_limit: number; start_hour: number; end_hour: number; last_run_at: string | null; last_error: string; max_searches_per_day: number; last_autopilot: string; enrich_daily_limit: number };
 
@@ -334,6 +335,12 @@ export async function runOutreach(now = new Date()): Promise<RunReport | null> {
           } catch (err) {
             notes.push(`Contact lookup failed: ${(err as Error).message}`);
           }
+        }
+        // Pre-fill map coordinates (free, OpenStreetMap) so the visit-route button rarely waits.
+        try {
+          await geocodeDueLeads();
+        } catch (err) {
+          notes.push(`Geocoding failed: ${(err as Error).message}`);
         }
         // Emails queue only for clients with a mailbox (theirs or the shared one); calls and visits always.
         const queued = await queueDue(settings);
