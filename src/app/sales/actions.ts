@@ -10,13 +10,13 @@ import { currentStep } from '@/lib/cadence';
 
 type Result = { error?: string };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/today');
+const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/next');
 const withSaved = (back: string, msg: string) => {
   const [path, hash] = safe(back).split('#');
   return `${path}${path.includes('?') ? '&' : '?'}saved=${encodeURIComponent(msg)}${hash ? `#${hash}` : ''}`;
 };
 const refresh = (clientId?: number) => {
-  for (const p of ['/today', '/leads', '/scoreboard', '/money']) revalidatePath(p);
+  for (const p of ['/next', '/leads', '/scoreboard', '/money']) revalidatePath(p);
   if (clientId) revalidatePath(`/clients/${clientId}`);
 };
 

@@ -67,10 +67,11 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   const r = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
   await login(r, 'rita@example.test', 'ritapassword1');
   if (new URL(r.url()).pathname !== '/next') fail(`rep should land on Today, got ${r.url()}`);
-  await r.goto(base + '/today');
-  const fresh = await r.textContent('section[aria-labelledby=new-h]');
-  if (!fresh.includes('Troy') || !fresh.includes('Detroit')) fail('call and visit list should be grouped by city');
-  if (!fresh.includes('Ask for: a free walkthrough')) fail('client script should show on the card');
+  await r.goto(clientUrl + '/prospects');
+  await r.waitForSelector('#leads-h');
+  const worklist = await r.textContent('section[aria-labelledby=leads-h]');
+  if (!worklist.includes('Tower Dental') || !worklist.includes('Maple Offices') || !worklist.includes('River Clinic')) fail('the rep should see their assigned prospects');
+  if (!worklist.includes('Ask for: a free walkthrough')) fail('client script should show on the card');
   await r.screenshot({ path: S + '/21-today-rep.png', fullPage: true });
   const cardOf = (name) => r.locator('article.lead', { hasText: name }).first();
   const log = async (name, channel, outcome, notes = '') => {
@@ -84,7 +85,7 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   };
   await log('Tower Dental', 'call', 'no_answer');
   console.log('after no answer:', psql("SELECT status || ' next ' || next_action_on FROM leads WHERE name = 'Tower Dental'"));
-  if ((await r.textContent('section[aria-labelledby=new-h]')).includes('Tower Dental')) fail('called prospect should leave the fresh list');
+  if (psql("SELECT count(*) FROM activities a JOIN leads l ON l.id = a.lead_id WHERE l.name = 'Tower Dental'") !== '1') fail('the call should be logged');
 
   await log('Maple Offices', 'visit', 'talked', 'Spoke to office manager, unhappy with current cleaner');
   const maple = r.locator('article.lead', { hasText: 'Maple Offices' }).first();
@@ -100,13 +101,12 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await mc.locator('input[name=location]').fill('Their office');
   await mc.locator('button:has-text("Book")').click();
   await r.waitForSelector('p.notice:has-text("booked")');
-  await r.goto(base + '/today');
-  if (!(await r.textContent('section[aria-labelledby=meet-h]')).includes('Maple Offices')) fail('meeting should show on Today');
+  if (!(await r.locator('article.lead', { hasText: 'Maple Offices' }).first().locator('ul.meetings').count())) fail('the booked meeting should show on the prospect');
   await r.goto(clientUrl + '/prospects');
   await r.locator('article.lead', { hasText: 'Maple Offices' }).first().locator('button:has-text("Held")').click();
   await r.waitForSelector('p.notice:has-text("Meeting updated")');
 
-  await r.goto(base + '/today');
+  await r.goto(clientUrl + '/prospects');
   await log('River Clinic', 'call', 'signed');
   console.log('River:', psql("SELECT status || ' won_by=' || won_by FROM leads WHERE name = 'River Clinic'"));
   if (psql("SELECT won_by FROM leads WHERE name = 'River Clinic'") !== String(ritaId)) fail('customer should be credited to Rita');

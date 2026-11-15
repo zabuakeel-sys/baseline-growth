@@ -107,8 +107,9 @@ const reply = ({ from, to, subject, inReplyTo, body, extra = '' }) =>
   const alert = sent().find((m) => m.subject.startsWith('Reply from Ann Able'));
   if (!alert) fail('no reply alert to the rep');
   else if (!alert.to.includes('owner@example.test') || !alert.text.includes('Call me Thursday at 2.')) fail('reply alert content wrong');
-  await p.goto(base + '/today?who=all');
-  if (!(await p.locator('section[aria-labelledby=replied-h]').textContent()).includes('Ann Able')) fail('Ann should top the Today list');
+  await p.goto(base + '/next?who=all');
+  await p.waitForSelector('.biz-day');
+  if (!(await p.locator('.lead-row:has-text("Ann Able") .r-replied').count())) fail('Ann should show as a reply to call back on Today');
   await p.goto(base + '/outbox');
   await p.screenshot({ path: S + '/20-replies.png', fullPage: true });
 

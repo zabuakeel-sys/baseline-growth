@@ -99,10 +99,10 @@ async function deliver(raw) {
   if (!patBody.includes('On behalf of LibraPro Facility Services')) fail('AI email should keep the signature and opt-out');
   if (psql("SELECT o.kind || ' ' || o.step || ' ' || o.client_id FROM outbox o JOIN leads l ON l.id = o.lead_id WHERE l.name = 'Sam Stone'") !== `sequence 2 ${clientId}`) fail('Sam email should be step 2');
 
-  // Calls and visits are on Today
-  await p.goto(base + '/today?who=all');
-  const today = await p.textContent('main');
-  if (!today.includes('Call: follow up') || !today.includes('Visit: drop in')) fail('Today should list the call and the visit');
+  // Calls and visits are on Today, tagged by what to do
+  await p.goto(base + '/next?who=all');
+  await p.waitForSelector('.biz-day');
+  if (!(await p.locator('.lr-tag.r-call').count()) || !(await p.locator('.lr-tag.r-visit').count())) fail('Today should list the call and the visit');
   await p.screenshot({ path: S + '/29-today-schedule.png', fullPage: true });
 
   // 3. Approve and send from the business's own mailbox, with the logo in the HTML version
@@ -122,12 +122,11 @@ async function deliver(raw) {
   if (psql(`SELECT count(*) FROM outbox WHERE sent_via = 'client:${clientId}'`) !== '2') fail('sends should be recorded against the client mailbox');
 
   // 4. A call logged on Today moves Quinn past the call step
-  await p.goto(base + '/today?who=all');
-  const card = p.locator('article.lead', { hasText: 'Quinn Quill' }).first();
-  if (!(await card.locator('input[name=outcome]').first().isVisible())) await card.locator('summary:has-text("Log a call or visit")').click();
-  await card.locator('input[name=channel][value=call]').check({ force: true });
-  await card.locator('input[name=outcome][value=no_answer]').check({ force: true });
-  await card.locator('form.log-form button[type=submit]').click();
+  await p.goto(base + '/next?who=all');
+  await p.waitForSelector('.biz-day');
+  await p.locator('.lead-row', { hasText: 'Quinn Quill' }).click();
+  await p.waitForSelector('.research');
+  await p.click('button[value=no_answer]');
   await p.waitForSelector('p.notice:has-text("logged")');
   if (lead('Quinn Quill', 'cadence_step') !== '2') fail('logged call should advance the schedule');
 

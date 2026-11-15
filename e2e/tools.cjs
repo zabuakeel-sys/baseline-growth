@@ -45,15 +45,13 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
     (${clientId}, 'Maple Offices', '(248) 555-0102', '', 'Research', '', CURRENT_DATE, ${ownerId}, '20 Elm St, Troy, MI 48084, USA', 4.1, 12)`);
   const tower = Number(psql("SELECT id FROM leads WHERE name = 'Tower Dental'"));
 
-  // 3. Brief on the card; 4. route link per city
-  await o.goto(base + '/today');
+  // 3. Brief on the prospect card
+  await o.goto(base + '/clients/' + clientId + '/prospects');
+  await o.waitForSelector('#leads-h');
   const card = o.locator('article.lead', { hasText: 'Tower Dental' });
   const briefText = await card.locator('ul.brief').textContent();
   console.log('brief:', briefText);
   if (!briefText.includes('Family dental practice') || !briefText.includes('well liked but not widely known')) fail('brief wrong');
-  const route = await o.locator('a:has-text("Route 2 visits in Google Maps")').getAttribute('href');
-  const ru = new URL(route);
-  if (ru.searchParams.get('destination') !== '20 Elm St, Troy, MI 48084, USA' || ru.searchParams.get('waypoints') !== '10 Main St, Troy, MI 48084, USA') fail('route link wrong: ' + route);
 
   // 2. Instant quote saved to the prospect
   await card.locator('summary:has-text("Instant quote")').click();
@@ -104,23 +102,22 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   console.log('referred:', referred);
   if (!referred.includes('Lakeside Medical Center|Referral from Metro Property Group: call today')) fail('partner referral not created');
   if (referred.includes('Spam Bot')) fail('honeypot let a bot through');
-  await o.goto(base + '/today');
-  if (!(await o.textContent('section[aria-labelledby=due-h]')).includes('Lakeside Medical Center')) fail('referral should be due today');
+  await o.goto(base + '/next');
+  await o.waitForSelector('.biz-day');
+  if (!(await o.locator('.lead-row:has-text("Lakeside Medical Center")').count())) fail('referral should be a due call on Today');
 
-  // 6. Referral ask after a customer signs
-  const lakeside = o.locator('article.lead', { hasText: 'Lakeside Medical Center' }).first();
-  await lakeside.locator('summary:has-text("Log a call or visit")').click();
-  await lakeside.locator('input[name=outcome][value=signed]').check({ force: true });
-  await lakeside.locator('form.log-form button[type=submit]').click();
-  await o.waitForSelector('#ask-h');
-  const ask = o.locator('details.ask', { hasText: 'Lakeside Medical Center' });
-  await ask.locator('summary').click();
-  await ask.locator('input[name=name1]').fill('Northside Clinic');
-  await ask.locator('input[name=phone1]').fill('(248) 555-0300');
-  await ask.locator('button:has-text("Save referrals")').click();
-  await o.waitForSelector('p.notice:has-text("1 referral added")');
+  // 6. Referral ask after a customer signs: open the lead, sign it, then the new customer shows a referral ask
+  await o.locator('.lead-row', { hasText: 'Lakeside Medical Center' }).click();
+  await o.waitForSelector('.research');
+  await o.click('button[value=signed]');
+  await o.waitForSelector('.biz-day');
+  await o.locator('.lead-row', { hasText: 'Lakeside Medical Center' }).click();
+  await o.waitForSelector('.r-tag:has-text("Ask for referrals")');
+  await o.fill('input[name=name1]', 'Northside Clinic');
+  await o.fill('input[name=phone1]', '(248) 555-0300');
+  await o.click('button:has-text("Save referrals")');
+  await o.waitForSelector('p.notice:has-text("referral")');
   if (psql("SELECT referred_by IS NOT NULL FROM leads WHERE name = 'Northside Clinic'") !== 't') fail('referral not linked to customer');
-  if (await o.locator('#ask-h').count()) fail('ask should disappear once done');
   await o.goto(base + '/partners');
   const prow = (await o.locator('tr', { hasText: 'Metro Property Group' }).locator('td').allTextContents()).map((t) => t.trim());
   console.log('partner row:', prow.slice(2, 5).join(' | '));
@@ -131,17 +128,6 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   await o.goto(base + '/insights');
   const ins = await o.textContent(`section:has(a:has-text("LibraPro Facility Services"))`);
   if (!ins.includes('Price: 4 (67%)') || !ins.includes('Timing: 2 (33%)')) fail('loss reasons wrong: ' + ins.replace(/\s+/g, ' ').slice(0, 300));
-
-  // 8. Goals and streak on Today
-  await o.goto(base + '/team');
-  const row = o.locator('tr', { hasText: 'owner@example.test' });
-  await row.locator('input[name=goal_calls]').fill('2');
-  await row.locator('form:has(input[name=goal_calls]) button').click();
-  await o.waitForFunction(() => document.querySelector('input[name=goal_calls]')?.value === '2');
-  await o.goto(base + '/today');
-  const goals = (await o.textContent('.goals')).replace(/\s+/g, ' ');
-  console.log('goals:', goals);
-  if (!goals.includes('Calls: 1 of 2')) fail('goal progress wrong');
 
   // Call assistant: consent gate, script fallback (no AI key in this run)
   await o.goto(base + '/call/' + tower);

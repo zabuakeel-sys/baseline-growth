@@ -9,13 +9,13 @@ import { formatCents, parseDollarsToCents, parsePercent, parseWholeNumber } from
 import { today } from '@/lib/work';
 
 type Result = { error?: string };
-const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/today');
+const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/next');
 const withSaved = (back: string, msg: string) => {
   const [path, hash] = safe(back).split('#');
   return `${path}${path.includes('?') ? '&' : '?'}saved=${encodeURIComponent(msg)}${hash ? `#${hash}` : ''}`;
 };
 const refresh = (clientId?: number) => {
-  for (const p of ['/today', '/leads', '/partners', '/insights']) revalidatePath(p);
+  for (const p of ['/next', '/leads', '/partners', '/insights']) revalidatePath(p);
   if (clientId) revalidatePath(`/clients/${clientId}`);
 };
 
@@ -129,6 +129,6 @@ export async function setGoals(userId: number, formData: FormData): Promise<Resu
   await query('UPDATE users SET goal_calls = $2, goal_visits = $3, goal_meetings = $4 WHERE id = $1',
     [userId, calls ?? 0, visits ?? 0, meetings ?? 0]);
   revalidatePath('/team');
-  revalidatePath('/today');
+  revalidatePath('/next');
   redirect('/team?saved=1');
 }

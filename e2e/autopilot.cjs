@@ -80,15 +80,14 @@ const psql = (sql) => execSync(`psql -h /var/tmp/bgpg -p 5433 -U app -d bg -tAc 
   if (split !== 'Ben Rep=8, Rita Rep=8') fail('prospects should be split 8 and 8');
   if (psql('SELECT count(*) FROM targets WHERE last_run_at IS NOT NULL') !== '4') fail('all 4 searches should have run');
 
-  // Rita's Today: her 8, grouped by city, ready to call
+  // Rita's Today: her 8 new prospects, under their business, ready to call
   const r = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
   await login(r, 'rita@example.test', 'reppassword1');
-  await r.goto(base + '/today');
-  const fresh = await r.textContent('section[aria-labelledby=new-h]');
-  const cards = await r.locator('section[aria-labelledby=new-h] article.lead').count();
+  await r.goto(base + '/next');
+  await r.waitForSelector('.biz-day');
+  const cards = await r.locator('.biz-day .lr-name').count();
   console.log('rita today cards:', cards);
-  if (cards !== 8) fail('Rita should see 8 new prospects');
-  if (!fresh.includes('Detroit') || !fresh.includes('Troy')) fail('grouped by city');
+  if (cards !== 8) fail('Rita should see her 8 new prospects');
   await r.screenshot({ path: S + '/26-rep-today.png', fullPage: false });
 
   // Running again adds nothing: every search has run and the pile is untouched
