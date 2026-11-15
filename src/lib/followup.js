@@ -149,3 +149,29 @@ export function ensureFooter(body, { address = '' } = {}) {
   if (addr && !out.includes(addr)) out += `\n${addr}`;
   return out;
 }
+
+/**
+ * A plain, honest opening email built from any business's own answers, used as the editable
+ * starting draft when the AI writer is off. Works for any kind of business: it leans on the
+ * business's own one-line offer and sends the prospect to its booking link, with no invented
+ * claims, numbers or hype. Placeholders ([First name], [Shop Name], [City]) and {link} are filled
+ * per prospect at send time by fillEmail; the signature and legal opt-out are added when sending.
+ *
+ * Deliberately avoids the word "free" in the subject (a strong spam trigger) and uses exactly one
+ * link, so it reads like a person's note, not a blast.
+ */
+export function openingTemplate({ clientName = '', offer = '', hasLink = false } = {}) {
+  const name = String(clientName || '').trim() || 'us';
+  const what = String(offer || '').trim().replace(/[.\s]+$/, '');
+  const intro = what ? `${what}.` : `I work with ${name}.`;
+  const cta = hasLink
+    ? `If [Shop Name] is open to it, you can start here: {link}`
+    : `If [Shop Name] is open to it, just reply and I'll send the details.`;
+  const body = [
+    `Hi [First name],`,
+    `${intro} I'd like to get [Shop Name] in [City] set up with ${name}.`,
+    cta,
+    `If someone else handles this at [Shop Name], feel free to pass this along.`,
+  ].join('\n\n');
+  return { subject: `${name} for [Shop Name]`, body };
+}

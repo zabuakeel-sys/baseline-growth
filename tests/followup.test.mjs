@@ -1,6 +1,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SCHEDULE_DAYS, daysBetween, isDue, leadStats, messageFor, needsDecision, nextDue, fillEmail } from '../src/lib/followup.js';
+import { SCHEDULE_DAYS, daysBetween, isDue, leadStats, messageFor, needsDecision, nextDue, fillEmail, ensureFooter, openingTemplate } from '../src/lib/followup.js';
+
+test('openingTemplate builds an honest, inbox-friendly first email for any business', () => {
+  // A marketplace and a cleaning company: same template, each grounded in its own offer.
+  for (const c of [
+    { clientName: 'AutoAt', offer: 'AutoAt sends drivers to independent repair shops near them', hasLink: true },
+    { clientName: 'LibraPro', offer: 'LibraPro keeps Michigan offices clean with one dependable crew', hasLink: false },
+  ]) {
+    const { subject, body } = openingTemplate(c);
+    // Subject names both sides and never carries a spam-trigger word.
+    assert.ok(subject.includes(c.clientName) && subject.includes('[Shop Name]'), 'subject names the client and the prospect');
+    assert.doesNotMatch(subject, /\bfree\b|\$|%/i, 'no spam words in the subject');
+    // Body is grounded in the business's own offer, with a greeting and no invented claims.
+    assert.match(body, /^Hi \[First name\],/);
+    assert.ok(body.includes(c.offer), 'the body uses the business\'s own offer');
+    // Exactly one link placeholder when there is a booking link, and a reply fallback when not.
+    assert.equal((body.match(/\{link\}/g) || []).length, c.hasLink ? 1 : 0);
+    if (!c.hasLink) assert.match(body, /just reply/);
+    // After filling for a real prospect, no square-bracket or curly placeholder is left behind.
+    const filled = ensureFooter(
+      fillEmail(body, { name: 'Joe\'s Garage', city: 'Troy', clientName: c.clientName, claimUrl: c.hasLink ? 'https://x.co/claim/1' : '', address: '1 Main St, Troy, MI' }),
+      { address: '1 Main St, Troy, MI' },
+    );
+    assert.doesNotMatch(filled, /\[[^\]]*\]|\{[^}]*\}/, 'every placeholder is filled in the sent email');
+    if (c.hasLink) assert.ok(filled.includes('https://x.co/claim/1'), 'the booking link is in the email');
+    assert.match(filled, /rather not hear from us/, 'the legal opt-out is present');
+  }
+});
 
 test('outreach schedule: first message, then 3, 7 and 14 days later', () => {
   assert.deepEqual(SCHEDULE_DAYS, [0, 3, 7, 14]);

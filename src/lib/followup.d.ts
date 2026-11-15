@@ -17,3 +17,4 @@ export function leadStats(leads: { status: string; touches_sent: number; lost_re
 export const OPT_OUT_LINE: string;
 export function fillEmail(text: string, ctx?: { firstName?: string; name?: string; city?: string; clientName?: string; claimUrl?: string; address?: string }, addGreeting?: boolean): string;
 export function ensureFooter(body: string, ctx?: { address?: string }): string;
+export function openingTemplate(ctx?: { clientName?: string; offer?: string; hasLink?: boolean }): { subject: string; body: string };

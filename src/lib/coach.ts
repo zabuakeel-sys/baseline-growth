@@ -261,8 +261,8 @@ Voice and style:
 Hard rules:
 - Use ONLY the facts provided about the client and the prospect. Never invent features, prices, promises, numbers, guarantees, or claims.
 - If a specific true detail about this prospect is given, you may open with one natural sentence about it. If not, open plainly. Never pretend to know them.
-- The ask must match the client's "first step" exactly. If the first step is free or no-cost, say plainly that it is free / no cost. If a link is given, include it so they can act in one click.
-- Also write a short, specific SUBJECT line (3 to 7 words) that matches the goal and would make this prospect open it. No clickbait, no all-caps.
+- The ask must match the client's "first step" exactly. If the first step is free or no-cost, say plainly that it is free / no cost. If a link is given, include it once so they can act in one click, and never more than once.
+- Also write a short, specific SUBJECT line (3 to 7 words) that matches the goal and would make this prospect open it. No clickbait, no all-caps. Never put the word "free" (or "$", "%", "guaranteed") in the SUBJECT: those send the email to spam. You may say free plainly in the body.
 - Length 45 to 95 words. The body starts with "Hi <first name>,". Write the body only in the body field. Do NOT add a signature, sign-off, name, or opt-out line (those are added automatically). Explain simply what to do and what happens after they do it (how their customers will reach them).
 - "touch" tells you which message this is. Touch 0 is the first contact: introduce briefly and make the ask. Touches 1+ are follow-ups to someone who has not replied: keep it very short, friendly, no guilt, restate the simple ask (and that it is free, if it is).`;
 

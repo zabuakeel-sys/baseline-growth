@@ -3,7 +3,7 @@ import { query } from './db';
 import type { Client } from './clients';
 import { missingAnswers } from './onboarding';
 import { sharedAccount } from './mail';
-import { messageFor, signOff } from './followup';
+import { messageFor, openingTemplate, signOff } from './followup';
 import { writeOutreachEmail } from './coach';
 
 export type SetupStep = { key: 'answers' | 'mailbox' | 'approve' | 'live'; label: string; done: boolean; href: string; action: string };
@@ -41,13 +41,11 @@ export async function starterEmail(c: Client): Promise<{ subject: string; body: 
   });
   const token = new RegExp(TOKEN, 'gi');
   if (written) return { subject: written.subject.replace(token, '{first_name}'), body: written.body.replace(token, '{first_name}'), source: 'ai' };
-  // No AI: a plain editable first-contact starter, with placeholders the owner can keep or change.
-  const ask = c.first_step ? c.first_step.replace(/[.\s]+$/, '') : 'get started';
-  const link = c.claim_url ? `\n\n[${ask}]` : '';
-  const body = `Hi [First name],\n\n${c.offer || `I'm reaching out from ${c.name}.`} I don't think [Shop Name] is set up with us yet.`
-    + `\n\nIf you'd like this for your shop, you can ${ask} here:${link || ` just reply and I'll send the details.`}`
-    + `\n\nIf someone else handles this, feel free to forward it to them.`;
-  return { subject: `Claim your free ${c.name} account`, body, source: 'template' };
+  // No AI: a plain, honest first-contact starter built from this business's own answers. It uses
+  // one link (when there is a booking link) and no "free" in the subject, so it reads like a note
+  // from a person and is less likely to be filed as spam. The owner can edit every word.
+  const t = openingTemplate({ clientName: c.name, offer: c.offer, hasLink: Boolean(c.claim_url) });
+  return { subject: t.subject, body: t.body, source: 'template' };
 }
 
 /** The email to approve: the first one actually queued for this business, or an AI-written sample. */
