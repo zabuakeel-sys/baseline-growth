@@ -112,6 +112,8 @@ export function placesFromOverpass(elements, maxResults) {
       rating: null,
       reviews: null,
       operational: true,
+      lat: el.lat ?? el.center?.lat ?? null,
+      lng: el.lon ?? el.center?.lon ?? null,
     });
   }
   out.sort((a, b) => Number(Boolean(b.phone || b.website)) - Number(Boolean(a.phone || a.website)));

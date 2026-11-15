@@ -38,16 +38,16 @@ export async function runSearch(targetId: number): Promise<{ found: number; adde
     const { email, about } = p.website ? await researchWebsite(p.website) : { email: '', about: '' };
     const { score, reasons } = scoreCandidate({ ...p, email });
     const r = await query(
-      `INSERT INTO candidates (client_id, target_id, place_id, name, address, phone, website, email, about, rating, reviews, score, reasons, researched_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now()) ON CONFLICT (client_id, place_id) DO NOTHING`,
-      [t.client_id, targetId, p.placeId, p.name, p.address, p.phone, p.website, email, about, p.rating, p.reviews, score, reasons.join('; ')]);
+      `INSERT INTO candidates (client_id, target_id, place_id, name, address, phone, website, email, about, rating, reviews, score, reasons, lat, lng, researched_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now()) ON CONFLICT (client_id, place_id) DO NOTHING`,
+      [t.client_id, targetId, p.placeId, p.name, p.address, p.phone, p.website, email, about, p.rating, p.reviews, score, reasons.join('; '), p.lat ?? null, p.lng ?? null]);
     added += r.rowCount ?? 0;
   });
   await query('UPDATE targets SET last_found = $2 WHERE id = $1', [targetId, added]);
   return { found: places.length, added };
 }
 
-type Candidate = { id: number; client_id: number; name: string; phone: string; email: string; about: string; website: string; address: string; rating: number | null; reviews: number | null };
+type Candidate = { id: number; client_id: number; name: string; phone: string; email: string; about: string; website: string; address: string; rating: number | null; reviews: number | null; lat: number | null; lng: number | null };
 
 /**
  * Turns found businesses into prospects in the outreach sequence today, assigned by `assign`.
@@ -55,7 +55,7 @@ type Candidate = { id: number; client_id: number; name: string; phone: string; e
  */
 export async function addCandidates(ids: number[], assign: (clientId: number) => number | null) {
   const rows = (await query<Candidate>(
-    "SELECT id, client_id, name, phone, email, about, website, address, rating, reviews FROM candidates WHERE id = ANY($1) AND status = 'found' ORDER BY score DESC, id",
+    "SELECT id, client_id, name, phone, email, about, website, address, rating, reviews, lat, lng FROM candidates WHERE id = ANY($1) AND status = 'found' ORDER BY score DESC, id",
     [ids])).rows;
   let added = 0;
   let blocked = 0;
@@ -67,9 +67,9 @@ export async function addCandidates(ids: number[], assign: (clientId: number) =>
     if (optedOut.rowCount) { blocked++; await query("UPDATE candidates SET status = 'skipped' WHERE id = $1", [c.id]); continue; }
     const notes = [c.about, c.website].filter(Boolean).join('\n');
     const lead = await query<{ id: number }>(
-      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address, rating, reviews, website)
-       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
-      [c.client_id, c.name, c.phone, c.email, notes, today(), assign(c.client_id), c.address, c.rating, c.reviews, c.website]);
+      `INSERT INTO leads (client_id, name, phone, email, source, need, notes, received_on, assignee_id, address, rating, reviews, website, lat, lng)
+       VALUES ($1, $2, $3, $4, 'Research', '', $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [c.client_id, c.name, c.phone, c.email, notes, today(), assign(c.client_id), c.address, c.rating, c.reviews, c.website, c.lat, c.lng]);
     await query("UPDATE candidates SET status = 'added', lead_id = $2 WHERE id = $1", [c.id, lead.rows[0].id]);
     added++;
   }

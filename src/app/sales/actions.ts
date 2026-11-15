@@ -7,8 +7,31 @@ import { CHANNELS, OUTCOMES, applyOutcome } from '@/lib/sales';
 import { parsePercent, parseWholeNumber } from '@/lib/money';
 import { today } from '@/lib/work';
 import { currentStep } from '@/lib/cadence';
+import { routeLink } from '@/lib/playbook';
+import { orderByNearest } from '@/lib/route';
+import { ensureCoords } from '@/lib/geocode';
 
 type Result = { error?: string };
+
+/**
+ * Builds a Google Maps driving route through the given visits, ordered shortest-first from where the
+ * rep is now. Geocodes any visit that has no coordinates yet (and caches them). Returns the URL.
+ */
+export async function planVisitRoute(leadIds: number[], originLat: number | null, originLng: number | null): Promise<string> {
+  const user = await requireUser();
+  const ids = (leadIds || []).filter((n) => Number.isInteger(n) && n > 0).slice(0, 10);
+  if (!ids.length) return '';
+  const scope = user.role === 'owner' ? '' : 'AND (l.assignee_id = $2 OR l.assignee_id IS NULL)';
+  const rows = (await query<{ id: number; lat: number | null; lng: number | null; address: string }>(
+    `SELECT l.id, l.lat, l.lng, l.address FROM leads l WHERE l.id = ANY($1) AND l.address <> '' ${scope}`,
+    user.role === 'owner' ? [ids] : [ids, user.id])).rows;
+  if (!rows.length) return '';
+  await ensureCoords(rows);
+  const origin = Number.isFinite(originLat) && Number.isFinite(originLng) ? { lat: originLat as number, lng: originLng as number } : null;
+  const addresses = orderByNearest(origin, rows).map((r) => r.address).filter(Boolean);
+  return routeLink(addresses, origin ? `${origin.lat},${origin.lng}` : '') ?? '';
+}
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const safe = (back: string) => (back.startsWith('/') && !back.startsWith('//') ? back : '/next');
 const withSaved = (back: string, msg: string) => {

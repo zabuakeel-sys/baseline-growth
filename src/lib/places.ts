@@ -8,16 +8,18 @@
 export type Place = {
   placeId: string; name: string; address: string; phone: string; website: string;
   rating: number | null; reviews: number | null; operational: boolean;
+  lat?: number | null; lng?: number | null;
 };
 
 type ApiPlace = {
   id: string; displayName?: { text?: string }; formattedAddress?: string; nationalPhoneNumber?: string;
   websiteUri?: string; rating?: number; userRatingCount?: number; businessStatus?: string;
+  location?: { latitude?: number; longitude?: number };
 };
 
 const FIELDS = [
   'places.id', 'places.displayName', 'places.formattedAddress', 'places.nationalPhoneNumber',
-  'places.websiteUri', 'places.rating', 'places.userRatingCount', 'places.businessStatus', 'nextPageToken',
+  'places.websiteUri', 'places.rating', 'places.userRatingCount', 'places.businessStatus', 'places.location', 'nextPageToken',
 ].join(',');
 
 // Search is always available now: with no Google key it uses the free OpenStreetMap source.
@@ -93,6 +95,8 @@ async function searchNew(textQuery: string, maxResults: number, key: string): Pr
         rating: p.rating ?? null,
         reviews: p.userRatingCount ?? null,
         operational: (p.businessStatus ?? 'OPERATIONAL') === 'OPERATIONAL',
+        lat: p.location?.latitude ?? null,
+        lng: p.location?.longitude ?? null,
       });
     }
     pageToken = data.nextPageToken;

@@ -60,10 +60,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
        ORDER BY o.sent_at DESC LIMIT 25`).then((r) => r.rows),
   ]);
   const sentToday = sends.filter((s) => s.sent_at && new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Detroit' }).format(new Date(s.sent_at)) === now).length;
-  // Today's visits, grouped by city so the route does not zig-zag, for the "plan my route" button.
-  const visitStops = [...queue.filter((l) => reasonFor(l, now) === 'visit' && l.address)]
-    .sort((a, b) => (cityOf(a.address) || '').localeCompare(cityOf(b.address) || ''))
-    .map((l) => l.address);
+  // Today's visits, for the "plan my route" button (ordered shortest-first server-side on click).
+  const visitIds = queue.filter((l) => reasonFor(l, now) === 'visit' && l.address).map((l) => l.id);
 
   const qp = (extra: Record<string, string>) => {
     const p = new URLSearchParams(extra);
@@ -122,10 +120,10 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       </div>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
-      {!focusLead && !focusAsk && visitStops.length > 0 && (
+      {!focusLead && !focusAsk && visitIds.length > 0 && (
         <div className="route-bar">
-          <VisitRoute addresses={visitStops} />
-          <span className="muted">Drives from where you are now through today&apos;s {visitStops.length} visit{visitStops.length === 1 ? '' : 's'}.</span>
+          <VisitRoute leadIds={visitIds} />
+          <span className="muted">Shortest driving route from where you are now through today&apos;s {visitIds.length} visit{visitIds.length === 1 ? '' : 's'}.</span>
         </div>
       )}
 
