@@ -8,8 +8,8 @@ import { today } from './work';
 
 /** Runs one saved search: finds businesses, drops known and unwanted ones, researches and scores the rest. */
 export async function runSearch(targetId: number): Promise<{ found: number; added: number }> {
-  const t = (await query<{ client_id: number; what: string; location: string; exclude: string; max_results: number }>(
-    'SELECT client_id, what, location, exclude, max_results FROM targets WHERE id = $1', [targetId])).rows[0];
+  const t = (await query<{ client_id: number; what: string; location: string; exclude: string; max_results: number; play: string }>(
+    'SELECT t.client_id, t.what, t.location, t.exclude, t.max_results, c.play FROM targets t JOIN clients c ON c.id = t.client_id WHERE t.id = $1', [targetId])).rows[0];
   if (!t) throw new Error('That search no longer exists.');
   // Mark it run first, so a failure does not retry the same paid search on every pass.
   // Marked as run up front so two overlapping runs do not search the same place twice; a failed
@@ -36,7 +36,7 @@ export async function runSearch(targetId: number): Promise<{ found: number; adde
   let added = 0;
   await eachLimited(fresh, 6, async (p) => {
     const { email, about } = p.website ? await researchWebsite(p.website) : { email: '', about: '' };
-    const { score, reasons } = scoreCandidate({ ...p, email });
+    const { score, reasons } = scoreCandidate({ ...p, email }, t.play);
     const r = await query(
       `INSERT INTO candidates (client_id, target_id, place_id, name, address, phone, website, email, about, rating, reviews, score, reasons, lat, lng, researched_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now()) ON CONFLICT (client_id, place_id) DO NOTHING`,

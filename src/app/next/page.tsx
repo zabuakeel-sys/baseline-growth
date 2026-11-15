@@ -5,6 +5,7 @@ import { leadsForDay, referralAsksDue, cityOf } from '@/lib/leads';
 import { nextQueue, reasonFor } from '@/lib/queue';
 import { routeLink } from '@/lib/playbook';
 import { bestCallTime } from '@/lib/calltime';
+import { fitReasons } from '@/lib/finder';
 import { today } from '@/lib/work';
 import { bookFromQueue, logActivity, setMeetingStatus } from '../sales/actions';
 import { addReferrals } from '../tools/actions';
@@ -201,6 +202,8 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
   try { if (website) host = new URL(website).host.replace(/^www\./, ''); } catch { /* ignore */ }
   const last = lead.activity[0];
   const research: [string, ReactNode][] = [];
+  const fits = fitReasons({ website: lead.website, phone: lead.phone, address: lead.address, rating: lead.rating, reviews: lead.reviews }, lead.client_play);
+  if (fits.length) research.push(['Why a good fit', fits[0].charAt(0).toUpperCase() + fits[0].slice(1)]);
   if (lead.contact_name) research.push(['Who to contact', `${lead.contact_name}${lead.contact_title ? ` · ${lead.contact_title}` : ''}`]);
   if (reason !== 'visit') {
     const ct = bestCallTime({ name: lead.name, need: lead.need, notes: lead.notes });

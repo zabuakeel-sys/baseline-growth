@@ -16,7 +16,7 @@ export const isExcluded = (name, exclude) => {
  * Favors businesses that are reachable (website, email), well run (rating) and not already
  * saturated with customers (a moderate review count).
  */
-export function scoreCandidate(c) {
+export function scoreCandidate(c, play = '') {
   let score = 0;
   const reasons = [];
   const add = (points, why) => { score += points; reasons.push(why); };
@@ -28,7 +28,45 @@ export function scoreCandidate(c) {
   if (c.reviews != null && c.reviews >= 10 && c.reviews <= 200) add(15, `${c.reviews} reviews: established, room to grow`);
   else if (c.reviews != null && c.reviews > 0 && c.reviews < 10) add(8, `${c.reviews} reviews: new or small`);
   if (c.operational !== false) add(10, 'open for business');
+  // Play-aware fit: what makes a strong target for THIS client's offer. These lift the prospects
+  // that fit the strategy above the ones that merely have a phone.
+  for (const [points, why] of fitSignals(c, play)) add(points, why);
   return { score: Math.min(score, 100), reasons };
+}
+
+/**
+ * Why a prospect is a good fit for a given play, as [points, reason] pairs. Uses only what the
+ * finder knows (web presence, rating, reviews, reachability). No play (or an unknown one) returns [].
+ */
+export function fitSignals(c, play = '') {
+  if (!play) return [];
+  const out = [];
+  const noSite = !c.website;
+  const lowRating = c.rating != null && c.rating < 3.8;
+  const fewReviews = c.reviews != null && c.reviews < 10;
+  const manyReviews = c.reviews != null && c.reviews >= 100;
+  if (play === 'claim_listing') {
+    if (noSite) out.push([15, 'no website yet, so a listing gets them found online']);
+    if (fewReviews) out.push([8, 'few reviews, so they need more customers']);
+    if (lowRating) out.push([6, 'low rating, so more bookings would help']);
+  } else if (play === 'free_demo' || play === 'free_trial') {
+    if (c.website) out.push([10, 'has a website, so likely open to software']);
+    if (manyReviews) out.push([6, 'busy, so more to gain from the tool']);
+  } else if (play === 'free_sample' || play === 'wholesale_account') {
+    if (manyReviews) out.push([10, 'established buyer, so higher volume']);
+    if (c.phone) out.push([4, 'reachable by phone to talk stock']);
+  } else if (play === 'free_consultation' || play === 'free_quote') {
+    if (c.website) out.push([8, 'has a website, so established and reachable']);
+    if (lowRating) out.push([6, 'low rating, so a clear reason to improve']);
+  } else if (play === 'free_walkthrough') {
+    if (c.phone && c.address) out.push([6, 'local and reachable for a visit']);
+  }
+  return out;
+}
+
+/** The fit reasons for a prospect under a play, as plain phrases (for showing a rep why it's a good lead). */
+export function fitReasons(c, play = '') {
+  return fitSignals(c, play).map(([, why]) => why);
 }
 
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}/gi;

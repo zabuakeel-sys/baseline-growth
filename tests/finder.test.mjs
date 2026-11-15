@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contactPages, hostOf, isExcluded, isPrivateAddress, parseExclude, pickAbout, pickEmail, scoreCandidate } from '../src/lib/finder.js';
+import { contactPages, hostOf, isExcluded, isPrivateAddress, parseExclude, pickAbout, pickEmail, scoreCandidate, fitReasons } from '../src/lib/finder.js';
 
 test('exclusions skip chains by name', () => {
   const ex = parseExclude(' Midas, Jiffy Lube ,,Firestone');
@@ -17,6 +17,25 @@ test('score favors reachable, well-run, not saturated businesses', () => {
   const huge = scoreCandidate({ website: 'x', rating: 4.8, reviews: 2400 });
   assert.equal(huge.score, 50, 'thousands of reviews: already busy, no review bonus');
   assert.ok(best.reasons.includes('public email found'));
+  // No play -> base score unchanged (existing behavior).
+  assert.equal(scoreCandidate({ website: 'x', rating: 4.8, reviews: 2400 }, '').score, 50);
+});
+
+test('play-aware fit lifts the prospects that fit the strategy', () => {
+  // For a marketplace (claim a listing), a shop with NO website and few reviews is a prime target.
+  const noSite = { phone: '1', reviews: 3, operational: true };
+  assert.ok(scoreCandidate(noSite, 'claim_listing').score > scoreCandidate(noSite, '').score, 'listing play should boost a no-website shop');
+  // For software, having a website is the positive signal instead.
+  const hasSite = { website: 'https://x.com', phone: '1', reviews: 150 };
+  assert.ok(scoreCandidate(hasSite, 'free_demo').reasons.some((r) => /open to software/.test(r)));
+  // Score never exceeds 100.
+  assert.ok(scoreCandidate({ website: 'x', email: 'a@b.com', phone: '1', rating: 4.6, reviews: 80 }, 'free_demo').score <= 100);
+});
+
+test('fitReasons explains why a prospect suits the play, and is empty without one', () => {
+  assert.deepEqual(fitReasons({ reviews: 2 }, ''), []);
+  assert.ok(fitReasons({ reviews: 2 }, 'claim_listing').some((r) => /need more customers/.test(r)));
+  assert.ok(fitReasons({ website: 'https://x.com' }, 'free_consultation').some((r) => /established and reachable/.test(r)));
 });
 
 test('email picking prefers the business own general inbox and ignores junk', () => {
