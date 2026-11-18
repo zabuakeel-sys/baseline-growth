@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { leadsForDay, referralAsksDue, cityOf } from '@/lib/leads';
+import { leadsForDay, referralAsksDue, cityOf, claimLink } from '@/lib/leads';
 import { nextQueue, reasonFor } from '@/lib/queue';
 import { routeLink } from '@/lib/playbook';
 import { bestCallTime } from '@/lib/calltime';
 import { fitReasons } from '@/lib/finder';
-import { moveSequence } from '@/lib/moves';
+import { moveSequence, isClaimFlow, claimCall } from '@/lib/moves';
 import { advanceMove } from '../sales/actions';
 import { isWarm, warmSource, warmFirst } from '@/lib/warm';
 import CopyButton from '../leads/CopyButton';
@@ -199,7 +199,10 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
   const reason = reasonFor(lead, now);
   const channel = reason === 'visit' ? 'visit' : 'call';
   const directions = lead.address ? routeLink([lead.address]) : null;
-  const opening = lead.client_script?.split('\n').find((l) => /^Opening:/.test(l))?.replace(/^Opening:\s*/, '').replace('[your name]', userName.split(' ')[0]);
+  // A business whose win is a sign-up or claimed listing (like AutoAt) gets a claim call, not a meeting playbook.
+  const claim = isClaimFlow({ play: lead.client_play, firstStep: lead.client_first_step, goal: lead.client_goal });
+  const claimKit = claim ? claimCall({ business: lead.client_name, name: lead.name, contactName: lead.contact_name, repName: userName, link: claimLink(lead.client_claim_url, lead.id) }) : null;
+  const opening = claimKit ? claimKit.opener : lead.client_script?.split('\n').find((l) => /^Opening:/.test(l))?.replace(/^Opening:\s*/, '').replace('[your name]', userName.split(' ')[0]);
   const noteLines = (lead.notes || '').split('\n').map((s) => s.trim()).filter(Boolean);
   const website = noteLines.find((l) => /^https?:\/\//i.test(l));
   const about = noteLines.filter((l) => l !== website).join(' ');
@@ -245,7 +248,7 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
         <Link className="button secondary" href={`/call/${lead.id}?from=next`}>Listen and coach me</Link>
       </div>
 
-      <NextMove lead={lead} back={back} now={now} />
+      {claimKit ? <ClaimLinkCard lead={lead} kit={claimKit} /> : <NextMove lead={lead} back={back} now={now} />}
 
       <div className="divline"></div>
       <div className="ol">Log what happened — you go back to the list.</div>
@@ -253,10 +256,10 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
         <input type="hidden" name="channel" value={channel} />
         <input name="notes" placeholder="Notes (optional): who you spoke to, what they said" aria-label="Notes" style={{ marginBottom: 10 }} />
         <div className="outc">
-          {BUTTONS.map(([value, label]) => <button key={value} type="submit" name="outcome" value={value} className={ocls(value)}>{label}</button>)}
+          {BUTTONS.map(([value, label]) => <button key={value} type="submit" name="outcome" value={value} className={ocls(value)}>{claim && value === 'signed' ? 'Claimed / signed up' : label}</button>)}
         </div>
       </ActionForm>
-      <details className="book" style={{ marginTop: 16 }}>
+      {!claim && <details className="book" style={{ marginTop: 16 }}>
         <summary><strong>Booked a meeting</strong></summary>
         <ActionForm className="grid" action={bookFromQueue.bind(null, lead.id, back, channel)}>
           <label>What<select name="kind" defaultValue="Walkthrough"><option>Walkthrough</option><option>Call</option><option>Visit</option><option>Demo</option><option>Sign-up</option></select></label>
@@ -265,10 +268,31 @@ function LeadDetail({ lead, back, now, userName, everyone }: { lead: Lead; back:
           <label>Where<input name="location" placeholder="Their office, phone, video" /></label>
           <div className="actions full"><button type="submit">Save meeting</button></div>
         </ActionForm>
-      </details>
+      </details>}
       {lead.client_script && <details style={{ marginTop: 10 }}><summary className="muted">Full script and answers to objections</summary><pre className="message">{lead.client_script}</pre></details>}
       <p className="task-meta" style={{ marginTop: 12 }}><Link href={`/clients/${lead.client_id}/prospects`}>Full record</Link></p>
     </article>
+  );
+}
+
+// For a claim-your-listing business: once they say yes on the call, send their own sign-up link
+// by text or email right away, while they are still on the phone.
+function ClaimLinkCard({ lead, kit }: { lead: Lead; kit: { sms: string; emailSubject: string; emailBody: string } }) {
+  const smsNumber = lead.phone ? lead.phone.replace(/[^\d+]/g, '') : '';
+  const hasLink = Boolean(lead.client_claim_url);
+  return (
+    <div className="card nextmove" style={{ marginTop: 16 }}>
+      <div><strong>When they say yes: send them their link</strong> <span className="muted">· while you are still on the phone</span></div>
+      <pre className="message" style={{ margin: '8px 0' }}>{kit.sms}</pre>
+      <div className="actions" style={{ gap: 8 }}>
+        {smsNumber && hasLink && <a className="button small" href={`sms:${smsNumber}?&body=${encodeURIComponent(kit.sms)}`}>Text the link</a>}
+        {lead.email && hasLink && <a className="button secondary small" href={`mailto:${lead.email}?subject=${encodeURIComponent(kit.emailSubject)}&body=${encodeURIComponent(kit.emailBody)}`}>Email the link</a>}
+        <CopyButton text={kit.sms} />
+      </div>
+      {hasLink
+        ? <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Text only after they say yes on the call. The link is tagged so their sign-up counts as yours. When they finish, tap &ldquo;Claimed / signed up&rdquo; below.</p>
+        : <p className="muted" style={{ fontSize: 12, margin: '6px 0 0' }}>No sign-up link saved for {lead.client_name} yet. Add it in its Settings, under &ldquo;Booking link and quote&rdquo;.</p>}
+    </div>
   );
 }
 

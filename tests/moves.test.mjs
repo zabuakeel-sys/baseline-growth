@@ -46,3 +46,21 @@ test('moveSequence is an ordered, gapped sequence: LinkedIn, then mail (if addre
   // Cold SMS is never an auto-sequence step.
   assert.ok(!moveSequence({ business: 'X', phone: '2485550000' }).some((m) => m.channel === 'sms'));
 });
+
+import { isClaimFlow, claimCall } from '../src/lib/moves.js';
+
+test('a sign-up or claim business gets the claim call, a meeting business does not', () => {
+  assert.equal(isClaimFlow({ play: 'claim_listing' }), true);
+  assert.equal(isClaimFlow({ play: 'free_walkthrough', firstStep: 'claim' }), false, 'a picked strategy wins');
+  assert.equal(isClaimFlow({ firstStep: 'claim your free listing' }), true);
+  assert.equal(isClaimFlow({ goal: 'Get every shop to sign up on AutoAt' }), true);
+  assert.equal(isClaimFlow({ firstStep: 'free walkthrough' }), false);
+});
+
+test('the claim text carries the tagged link and the names', () => {
+  const k = claimCall({ business: 'AutoAt', name: 'Joe Auto', contactName: 'Joe Smith', repName: 'Zain Akeel', link: 'https://autoat.org/claim?ref=bg-7' });
+  assert.match(k.sms, /^Hi Joe, it's Zain with AutoAt/);
+  assert.match(k.sms, /claim Joe Auto on AutoAt: https:\/\/autoat\.org\/claim\?ref=bg-7$/);
+  assert.match(k.opener, /Joe Auto already has a page on AutoAt/);
+  assert.match(claimCall({ name: 'X' }).sms, /Add the sign-up link in Settings/);
+});
