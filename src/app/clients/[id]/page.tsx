@@ -9,6 +9,9 @@ import { query } from '@/lib/db';
 import { setupSteps } from '@/lib/setup';
 import { routeLink } from '@/lib/playbook';
 import { startFinding } from '../onboarding';
+import { approveFirstEmail } from '../outreach';
+import { starterEmail } from '@/lib/setup';
+import { fillEmail, ensureFooter } from '@/lib/followup';
 import ActionForm from '../../ActionForm';
 
 export const dynamic = 'force-dynamic';
@@ -97,6 +100,13 @@ export default async function ClientPage({ params, searchParams }: {
   if (!live) {
     const steps = isOwner ? await setupSteps(client) : [];
     const next = steps.find((s) => !s.done && s.key !== 'live');
+    // When approving is the next step, show the email right here with one button to approve it,
+    // so it cannot be confused with the other Save buttons on the Settings page.
+    const preview = next?.key === 'approve' ? await (async () => {
+      const draft = await starterEmail(client);
+      const ctx = { firstName: 'Pat', name: 'Sample Shop', city: 'Troy', clientName: client.name, claimUrl: client.claim_url, address: client.mailing_address };
+      return { subject: fillEmail(draft.subject, ctx, false).replace(/\n+/g, ' ').trim(), body: ensureFooter(fillEmail(draft.body, ctx), { address: client.mailing_address }) };
+    })() : null;
     return (
       <>
         <div className="biz-top">
@@ -124,8 +134,22 @@ export default async function ClientPage({ params, searchParams }: {
           )}
           {next ? (
             <>
-              <p style={{ marginTop: 0 }}>Next: <strong>{next.key === 'approve' ? 'review and approve the first email' : next.action.toLowerCase()}</strong>.</p>
-              <Link className="button" href={next.key === 'approve' ? `/clients/${id}/settings#approve-h` : next.href}>Do it</Link>
+              <p style={{ marginTop: 0 }}>Next: <strong>{next.key === 'approve' ? 'read the first email below and approve it' : next.action.toLowerCase()}</strong>.</p>
+              {preview ? (
+                <>
+                  <div className="card" style={{ background: 'var(--bg)', margin: '0 0 12px' }}>
+                    <div className="task-meta" style={{ marginBottom: 6 }}>Example, as a shop called Sample Shop in Troy would get it</div>
+                    <p style={{ margin: '0 0 8px' }}><strong>Subject:</strong> {preview.subject}</p>
+                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 14 }}>{preview.body}</div>
+                  </div>
+                  <div className="actions">
+                    <ActionForm action={approveFirstEmail.bind(null, id)}><button type="submit">Approve and start sending</button></ActionForm>
+                    <Link className="button secondary" href={`/clients/${id}/settings#approve-h`}>Edit the email first</Link>
+                  </div>
+                </>
+              ) : (
+                <Link className="button" href={next.href}>Do it</Link>
+              )}
             </>
           ) : (
             <p style={{ marginTop: 0 }}>Everything is ready. Turn on sending from <Link href={`/clients/${id}/settings#approve-h`}>the first email</Link>.</p>

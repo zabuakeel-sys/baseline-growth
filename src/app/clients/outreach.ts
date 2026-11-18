@@ -80,6 +80,22 @@ export async function approveOutreach(clientId: number, back: string): Promise<R
   redirect(`/clients/${clientId}?saved=${encodeURIComponent('Approved. Emails now send on their own')}`);
 }
 
+/**
+ * One button on the business page: approve the first email as shown. If the owner never saved
+ * their own version, the draft they are looking at is saved first, then sending turns on.
+ */
+export async function approveFirstEmail(clientId: number): Promise<Result> {
+  await requireOwner();
+  const found = await getClient(clientId);
+  if (!found) return { error: 'That business no longer exists.' };
+  const c = found.client;
+  if (!c.outreach_subject.trim() || !c.outreach_body.trim()) {
+    const draft = await starterEmail(c);
+    await query('UPDATE clients SET outreach_subject = $2, outreach_body = $3 WHERE id = $1', [clientId, draft.subject, draft.body]);
+  }
+  return approveOutreach(clientId, `/clients/${clientId}`);
+}
+
 export async function pauseOutreach(clientId: number, back: string): Promise<Result> {
   await requireOwner();
   await query('UPDATE clients SET outreach_approved_at = NULL WHERE id = $1', [clientId]);
