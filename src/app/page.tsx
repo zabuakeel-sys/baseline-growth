@@ -18,7 +18,7 @@ export default async function Overview({ searchParams }: { searchParams: Promise
   const [week, prior, drafts, failedRow, clients, spark] = await Promise.all([
     query<{ emails: number; replies: number; customers: number; inplay: number }>(
       `SELECT (SELECT count(*)::int FROM outbox WHERE status='sent' AND kind='sequence' AND sent_at > now()-interval '7 days') AS emails,
-              (SELECT count(*)::int FROM replies WHERE kind='reply' AND received_at > now()-interval '7 days') AS replies,
+              (SELECT count(*)::int FROM replies WHERE kind='reply' AND lead_id IS NOT NULL AND received_at > now()-interval '7 days') AS replies,
               (SELECT count(*)::int FROM leads WHERE status='won' AND customer_since > $1::date - 7) AS customers,
               (SELECT count(*)::int FROM leads WHERE status IN ('new','following_up','talking')) AS inplay`, [now]).then((r) => r.rows[0]),
     query<{ emails: number }>(
