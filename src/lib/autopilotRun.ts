@@ -52,9 +52,12 @@ export async function runAutopilot(): Promise<AutopilotReport> {
     const loadPool = async () => autoAddable((await query<{ id: number; score: number; email: string; phone: string }>(
       "SELECT id, score, email, phone FROM candidates WHERE client_id = $1 AND status = 'found'", [client.id])).rows, addFloorFor(client.play));
     let pool = await loadPool();
-    while (pool.length < want && canSearch && searchesLeft > 0) {
-      const targets = (await query<{ id: number; last_run_at: string | null }>(
-        `SELECT id, to_char(last_run_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_run_at FROM targets WHERE client_id = $1`,
+    let failures = 0;
+    while (pool.length < want && canSearch && searchesLeft > 0 && failures < 2) {
+      const targets = (await query<{ id: number; last_run_at: string | null; failed_at: string | null; fail_count: number }>(
+        `SELECT id, to_char(last_run_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_run_at,
+                to_char(failed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS failed_at, fail_count
+         FROM targets WHERE client_id = $1`,
         [client.id])).rows;
       const next = dueTarget(targets, now);
       if (!next) break;
@@ -65,8 +68,11 @@ export async function runAutopilot(): Promise<AutopilotReport> {
       } catch (err) {
         report.notes.push(`${client.name}: search failed: ${(err as Error).message}`);
         console.error(`autopilot: ${client.name} search failed:`, (err as Error).message);
-        searchPausedUntil = Date.now() + PAUSE_AFTER_FAILURE_MS;
-        break; // stop searching for this business this run; other businesses still get their turn
+        // This search now waits before its next try; move on to the business's next search.
+        // Two failures in one run usually means the source itself is down: pause all searching briefly.
+        failures++;
+        if (failures >= 2) searchPausedUntil = Date.now() + PAUSE_AFTER_FAILURE_MS;
+        continue;
 
       }
       pool = await loadPool();

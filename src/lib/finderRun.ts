@@ -20,7 +20,9 @@ export async function runSearch(targetId: number): Promise<{ found: number; adde
   try {
     places = await searchPlaces(`${t.what} in ${t.location}`, t.max_results);
   } catch (err) {
-    await query('UPDATE targets SET last_run_at = $2 WHERE id = $1', [targetId, before]);
+    // Put the run time back (so it still counts as not run) and note the failure, so autopilot
+    // waits before retrying this one and moves on to the business's other searches meanwhile.
+    await query('UPDATE targets SET last_run_at = $2, failed_at = now(), fail_count = fail_count + 1 WHERE id = $1', [targetId, before]);
     throw err;
   }
   const exclude = parseExclude(t.exclude);
@@ -43,7 +45,7 @@ export async function runSearch(targetId: number): Promise<{ found: number; adde
       [t.client_id, targetId, p.placeId, p.name, p.address, p.phone, p.website, email, about, p.rating, p.reviews, score, reasons.join('; '), p.lat ?? null, p.lng ?? null]);
     added += r.rowCount ?? 0;
   });
-  await query('UPDATE targets SET last_found = $2 WHERE id = $1', [targetId, added]);
+  await query('UPDATE targets SET last_found = $2, failed_at = NULL, fail_count = 0 WHERE id = $1', [targetId, added]);
   return { found: places.length, added };
 }
 

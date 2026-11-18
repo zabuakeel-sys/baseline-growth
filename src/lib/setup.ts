@@ -6,7 +6,7 @@ import { sharedAccount } from './mail';
 import { messageFor, openingTemplate, signOff } from './followup';
 import { writeOutreachEmail } from './coach';
 
-export type SetupStep = { key: 'answers' | 'mailbox' | 'approve' | 'live'; label: string; done: boolean; href: string; action: string };
+export type SetupStep = { key: 'answers' | 'mailbox' | 'approve' | 'prospects' | 'live'; label: string; done: boolean; href: string; action: string };
 
 export async function setupSteps(c: Client): Promise<SetupStep[]> {
   const a = (c.onboarding ?? {}) as Record<string, unknown>;
@@ -16,10 +16,12 @@ export async function setupSteps(c: Client): Promise<SetupStep[]> {
   // A half-set-up/broken mailbox is ignored, since outreach falls back to the shared mailbox.
   const mailboxDone = Boolean(box?.verified) || Boolean(sharedAccount());
   const live = (await query<{ n: number }>("SELECT count(*)::int AS n FROM outbox WHERE client_id = $1 AND status = 'sent'", [c.id])).rows[0].n > 0;
+  const prospects = (await query<{ n: number }>('SELECT count(*)::int AS n FROM leads WHERE client_id = $1', [c.id])).rows[0].n;
   return [
     { key: 'answers', label: 'Answers', done: answersDone, href: `/clients/${c.id}/setup`, action: 'Finish the owner\'s answers' },
-    { key: 'mailbox', label: 'Mailbox', done: mailboxDone, href: `/clients/${c.id}#mailbox-h`, action: 'Add the shared Baseline Growth mailbox, or connect one for this business' },
-    { key: 'approve', label: 'Approve first email', done: Boolean(c.outreach_approved_at), href: `/clients/${c.id}#approve-h`, action: c.mailing_address ? 'Read and approve their first email' : 'Add a mailing address, then approve their first email' },
+    { key: 'mailbox', label: 'Mailbox', done: mailboxDone, href: `/clients/${c.id}/settings#mailbox-h`, action: 'Add the shared Baseline Growth mailbox, or connect one for this business' },
+    { key: 'approve', label: 'Approve first email', done: Boolean(c.outreach_approved_at), href: `/clients/${c.id}/settings#approve-h`, action: c.mailing_address ? 'Read and approve their first email' : 'Add a mailing address, then approve their first email' },
+    { key: 'prospects', label: 'Get prospects', done: prospects > 0, href: `/clients/${c.id}#prospects-h`, action: c.autopilot ? 'Wait for the first prospects (finding is on), or add your own' : 'Turn on prospect finding, or add your own prospects' },
     { key: 'live', label: 'Live', done: live && Boolean(c.outreach_approved_at), href: `/clients/${c.id}`, action: 'Waiting for the first email to go out' },
   ];
 }

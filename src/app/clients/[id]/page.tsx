@@ -8,6 +8,8 @@ import { nextQueue, reasonFor } from '@/lib/queue';
 import { query } from '@/lib/db';
 import { setupSteps } from '@/lib/setup';
 import { routeLink } from '@/lib/playbook';
+import { startFinding } from '../onboarding';
+import ActionForm from '../../ActionForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +52,38 @@ export default async function ClientPage({ params, searchParams }: {
        (SELECT count(*)::int FROM leads WHERE client_id = $1 AND status = 'won') AS customers`,
     [id])).rows[0];
 
+  const finding = (await query<{ searches: number; run: number; waiting: number }>(
+    `SELECT (SELECT count(*)::int FROM targets WHERE client_id = $1) AS searches,
+            (SELECT count(*)::int FROM targets WHERE client_id = $1 AND last_run_at IS NOT NULL) AS run,
+            (SELECT count(*)::int FROM candidates WHERE client_id = $1 AND status = 'found') AS waiting`, [id])).rows[0];
+  const totalProspects = (await query<{ n: number }>('SELECT count(*)::int AS n FROM leads WHERE client_id = $1', [id])).rows[0].n;
+
+  // Where prospects come from. Shown until the business has its first prospects, so a new
+  // business never lands on an empty screen with no next step.
+  const getProspects = (
+    <section className="card" aria-labelledby="prospects-h">
+      <h2 id="prospects-h" style={{ marginTop: 0 }}>Get prospects for {client.name}</h2>
+      {client.autopilot ? (
+        <p style={{ marginTop: 0 }}>
+          Prospect finding is <strong>on</strong>: {finding.searches} search{finding.searches === 1 ? '' : 'es'} set, {finding.run} run so far
+          {finding.waiting > 0 ? `, ${finding.waiting} found and waiting for review` : ''}. New prospects show up here within a few minutes and go to your reps.
+        </p>
+      ) : finding.searches > 0 ? (
+        <p style={{ marginTop: 0 }}>The system can find businesses that fit {client.name} ({finding.searches} search{finding.searches === 1 ? '' : 'es'} ready) and hand them to your reps every day. It is off right now.</p>
+      ) : (
+        <p style={{ marginTop: 0 }}>Say who {client.name} sells to and where, and the system finds them every day.</p>
+      )}
+      <div className="actions">
+        {isOwner && !client.autopilot && finding.searches > 0 && (
+          <ActionForm action={startFinding.bind(null, id)}><button type="submit">Start finding prospects</button></ActionForm>
+        )}
+        {isOwner && finding.searches === 0 && <Link className="button" href={`/clients/${id}/setup`}>Say who to find</Link>}
+        <Link className={`button${!isOwner || finding.searches > 0 ? ' secondary' : ''}`} href={`/clients/${id}/prospects`}>Add prospects yourself</Link>
+        {finding.waiting > 0 && <Link className="button secondary" href="/find">Review found businesses</Link>}
+      </div>
+    </section>
+  );
+
   const opening = client.call_script?.split('\n').find((l) => /^Opening:/i.test(l))?.replace(/^Opening:\s*/i, '').replace('[name]', user.name.split(' ')[0]);
   const toDo = replies.length + calls.length + visits.length + act.drafts;
   const callContext = (l: typeof calls[number]) => {
@@ -72,8 +106,22 @@ export default async function ClientPage({ params, searchParams }: {
         <h1 style={{ marginBottom: 4 }}>{client.name}</h1>
         <p className="sub" style={{ marginTop: 0 }}>Still setting up</p>
         {saved && <p className="notice" role="status">{saved}.</p>}
-        <section className="card">
+        <section className="card checklist">
           <h2 style={{ marginTop: 0 }}>Finish setting up</h2>
+          {steps.length > 0 && (
+            <ul style={{ marginBottom: 12 }}>
+              {steps.filter((s) => s.key !== 'live').map((s, i) => (
+                <li key={s.key} className={s.done ? 'done' : ''}>
+                  <span className="tickmark" aria-hidden="true">{s.done ? '\u2713' : i + 1}</span>
+                  <div style={{ flex: 1 }}>
+                    <strong>{s.label}</strong>
+                    {!s.done && <div className="task-meta">{s.action}</div>}
+                  </div>
+                  {!s.done && s === next && <span className="pill missing" style={{ alignSelf: 'center' }}>Next</span>}
+                </li>
+              ))}
+            </ul>
+          )}
           {next ? (
             <>
               <p style={{ marginTop: 0 }}>Next: <strong>{next.key === 'approve' ? 'review and approve the first email' : next.action.toLowerCase()}</strong>.</p>
@@ -83,6 +131,8 @@ export default async function ClientPage({ params, searchParams }: {
             <p style={{ marginTop: 0 }}>Everything is ready. Turn on sending from <Link href={`/clients/${id}/settings#approve-h`}>the first email</Link>.</p>
           )}
         </section>
+        {!isOwner && <section className="card"><p style={{ margin: 0 }}>The owner is still setting up {client.name}. Its prospects show up in <Link href="/next">Next up</Link> once it is live.</p></section>}
+        {totalProspects === 0 && getProspects}
       </>
     );
   }
@@ -102,7 +152,7 @@ export default async function ClientPage({ params, searchParams }: {
       </p>
       {saved && <p className="notice" role="status">{saved}.</p>}
 
-      {toDo === 0 ? (
+      {totalProspects === 0 || (act.prospects === 0 && act.customers === 0) ? getProspects : toDo === 0 ? (
         <section className="card">
           <h2 style={{ marginTop: 0 }}>You are caught up</h2>
           <p className="muted" style={{ margin: 0 }}>Nobody needs a call or visit right now. New shops are emailed automatically, and anyone who should be called will show up here on their day.</p>

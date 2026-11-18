@@ -91,8 +91,8 @@ export async function saveOnboarding(clientId: number | null, formData: FormData
   revalidatePath('/');
   revalidatePath(`/clients/${id}`);
   redirect(clientId === null
-    ? `/clients/${id}/settings?saved=${encodeURIComponent(`${fields.name} is set up. Review and approve the first email, then prospects start coming in`)}#approve-h`
-    : `/clients/${id}/settings?saved=Answers+saved`);
+    ? `/clients/${id}?saved=${encodeURIComponent(`${fields.name} is added. Follow the steps below to start selling`)}`
+    : `/clients/${id}?saved=Answers+saved`);
 }
 
 /**
@@ -132,7 +132,18 @@ export async function saveAutopilot(clientId: number, formData: FormData): Promi
   if (daily === null || Number.isNaN(daily) || daily > 500) return { error: 'New prospects per day must be 0 to 500.' };
   await query('UPDATE clients SET autopilot = $2, daily_prospects = $3 WHERE id = $1', [clientId, formData.get('autopilot') === 'on', daily]);
   revalidatePath(`/clients/${clientId}`);
-  redirect(`/clients/${clientId}/settings?saved=Autopilot+saved#autopilot-h`);
+  redirect(`/clients/${clientId}?saved=Autopilot+saved`);
+}
+
+/** One tap from the business page: turn on prospect finding. The background run (every 5 minutes) does the rest. */
+export async function startFinding(clientId: number): Promise<Result> {
+  await requireOwner();
+  const c = (await query<{ n: number }>('SELECT count(*)::int AS n FROM targets WHERE client_id = $1', [clientId])).rows[0];
+  if (!c.n) return { error: 'Say who to find and where first: open Edit answers and fill in customer types and places.' };
+  await query('UPDATE clients SET autopilot = true, daily_prospects = CASE WHEN daily_prospects > 0 THEN daily_prospects ELSE 10 END WHERE id = $1', [clientId]);
+  revalidatePath('/');
+  revalidatePath(`/clients/${clientId}`);
+  redirect(`/clients/${clientId}?saved=${encodeURIComponent('Prospect finding is on. The first prospects show up here within a few minutes')}`);
 }
 
 /**
