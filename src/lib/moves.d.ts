@@ -15,3 +15,5 @@ type MoveCtx = {
 };
 export function channelMoves(ctx?: MoveCtx): Move[];
 export function moveSequence(ctx?: MoveCtx): (Move & { days: number })[];
+export function isClaimFlow(ctx?: { play?: string; firstStep?: string; goal?: string }): boolean;
+export function claimCall(ctx?: { business?: string; name?: string; contactName?: string; repName?: string; link?: string }): { opener: string; sms: string; emailSubject: string; emailBody: string };

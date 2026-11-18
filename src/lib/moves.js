@@ -77,3 +77,30 @@ export function moveSequence(ctx = {}) {
     .filter(Boolean)
     .map((m) => ({ ...m, days: SEQUENCE_GAP[m.channel] ?? 3 }));
 }
+
+/**
+ * True when the win for this business is the prospect signing up or claiming a listing on its app
+ * (like AutoAt), not a meeting. Set by the "Claim a free listing" strategy, or read from the
+ * business's own first step and goal when no strategy was picked.
+ */
+export function isClaimFlow({ play = '', firstStep = '', goal = '' } = {}) {
+  if (play === 'claim_listing') return true;
+  if (play) return false;
+  return /\b(claim|sign[ -]?up|signup|register|list(ing)?|join)\b/i.test(`${firstStep} ${goal}`);
+}
+
+/**
+ * What a rep says and sends on a claim-your-listing call: the opener, and the text and email that
+ * carry the prospect's own sign-up link once they say yes on the phone.
+ */
+export function claimCall({ business = 'us', name = 'your business', contactName = '', repName = '', link = '' } = {}) {
+  const first = firstNameOf(contactName);
+  const me = firstNameOf(repName) || 'I';
+  const linkPart = link ? `: ${link}` : '. (Add the sign-up link in Settings first.)';
+  return {
+    opener: `Hi, is this the owner or manager? This is ${me} with ${business}. ${name} already has a page on ${business} where drivers find shops and book them. I'm calling so you can claim it and start getting those bookings. Can I text you the link?`,
+    sms: `Hi${first ? ` ${first}` : ''}, it's ${me} with ${business}, thanks for the call. Here's the link to claim ${name} on ${business}${linkPart}`,
+    emailSubject: `Your ${business} link for ${name}`,
+    emailBody: `Hi${first ? ` ${first}` : ''},\n\nThanks for the call. Here's the link to claim ${name} on ${business}${linkPart}\n\nIt only takes a few minutes. Reply here if anything gets stuck.\n\n${repName || me}\n${business}`,
+  };
+}
