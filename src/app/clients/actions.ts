@@ -34,7 +34,7 @@ export async function updateClient(id: number, formData: FormData): Promise<Resu
   );
   revalidatePath('/');
   revalidatePath(`/clients/${id}`);
-  redirect(`/clients/${id}/settings?saved=Client+saved#details-h`);
+  redirect(`/clients/${id}?saved=Client+saved`);
 }
 
 export async function saveBaseline(id: number, formData: FormData): Promise<Result> {

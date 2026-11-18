@@ -44,7 +44,7 @@ export default async function Overview({ searchParams }: { searchParams: Promise
     const next = steps.find((s) => !s.done && s.key !== 'live');
     if (next) {
       health.set(c.id, 'warn');
-      needs.push({ icon: 'mail', a: `${c.name} — ${next.key === 'approve' ? 'approve the first email' : next.action.toLowerCase()}`, b: next.key === 'approve' ? 'Ready to start sending' : 'Finish setting up', href: next.key === 'approve' ? `/clients/${c.id}/settings#approve-h` : next.href, cta: 'Open', sec: true });
+      needs.push({ icon: 'mail', a: `${c.name} — ${next.key === 'approve' ? 'approve the first email' : next.action.toLowerCase()}`, b: next.key === 'approve' ? 'Ready to start sending' : next.key === 'prospects' ? 'Getting prospects' : 'Finish setting up', href: next.key === 'approve' ? `/clients/${c.id}/settings#approve-h` : next.href, cta: 'Open', sec: true });
     } else {
       health.set(c.id, c.outreach_approved_at ? 'ok' : 'warn');
     }

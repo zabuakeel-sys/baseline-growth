@@ -75,8 +75,9 @@ export async function approveOutreach(clientId: number, back: string): Promise<R
   await query('UPDATE clients SET outreach_approved_at = now() WHERE id = $1', [clientId]);
   await query("UPDATE outbox SET status = 'approved', approved_at = now() WHERE client_id = $1 AND kind = 'sequence' AND status = 'pending'", [clientId]);
   for (const p of ['/', '/clients', `/clients/${clientId}`, '/outbox']) revalidatePath(p);
-  const [path, hash] = safe(back).split('#');
-  redirect(`${path}?saved=${encodeURIComponent('Approved. Outreach for this business now sends on its own')}${hash ? `#${hash}` : ''}`);
+  // Approving is the last setup step, so go to the business page, where the work list starts.
+  void back;
+  redirect(`/clients/${clientId}?saved=${encodeURIComponent('Approved. Emails now send on their own')}`);
 }
 
 export async function pauseOutreach(clientId: number, back: string): Promise<Result> {
