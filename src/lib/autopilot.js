@@ -21,8 +21,23 @@ export function addFloorFor(play) {
 
 const daysAgo = (iso, today) => Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${iso.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
 
-/** The next search to run: never-run ones first (oldest added), then the stalest past the refresh window. */
-export function dueTarget(targets, today, refreshDays = REFRESH_DAYS) {
+/** Hours a failed search waits before it is tried again: 1, 2, 4 ... up to 24. */
+export function failCooldownHours(failCount) {
+  return Math.min(24, 2 ** Math.max(0, (failCount || 1) - 1));
+}
+
+/** True while a search that failed recently is still waiting to be retried. */
+export function coolingDown(t, nowMs) {
+  if (!t.failed_at || !t.fail_count) return false;
+  return nowMs - Date.parse(t.failed_at) < failCooldownHours(t.fail_count) * 3_600_000;
+}
+
+/**
+ * The next search to run: never-run ones first (oldest added), then the stalest past the refresh
+ * window. A search that just failed is skipped for a while, so the others still get their turn.
+ */
+export function dueTarget(targets, today, refreshDays = REFRESH_DAYS, nowMs = Date.now()) {
+  targets = targets.filter((t) => !coolingDown(t, nowMs));
   const never = targets.filter((t) => !t.last_run_at).sort((a, b) => a.id - b.id);
   if (never.length) return never[0];
   const stale = targets.filter((t) => daysAgo(t.last_run_at, today) >= refreshDays)

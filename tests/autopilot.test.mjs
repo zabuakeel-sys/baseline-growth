@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoAddable, dueTarget, pickRep, prospectsToAdd } from '../src/lib/autopilot.js';
+import { autoAddable, dueTarget, failCooldownHours, pickRep, prospectsToAdd } from '../src/lib/autopilot.js';
 
 test('never-run searches go first, then ones past the refresh window', () => {
   const targets = [
@@ -49,4 +49,18 @@ test('marketplace clients use a lower auto-add floor so low-presence shops come 
   const gearhead = [{ id: 1, score: 59, email: '', phone: '3135550300' }];
   assert.equal(autoAddable(gearhead, addFloorFor('claim_listing')).length, 1);
   assert.equal(autoAddable(gearhead, addFloorFor('free_walkthrough')).length, 0);
+});
+
+test('a search that just failed waits, so the next search gets its turn', () => {
+  const now = Date.parse('2026-11-18T12:00:00Z');
+  const targets = [
+    { id: 1, last_run_at: null, failed_at: '2026-11-18T11:50:00Z', fail_count: 1 },
+    { id: 2, last_run_at: null, failed_at: null, fail_count: 0 },
+  ];
+  assert.equal(dueTarget(targets, '2026-11-18', 30, now).id, 2, 'the failing search is skipped for now');
+  assert.equal(dueTarget(targets, '2026-11-18', 30, now + 2 * 3_600_000).id, 1, 'after its wait it is tried again');
+  assert.equal(dueTarget([targets[0]], '2026-11-18', 30, now), null, 'nothing else due: wait');
+  assert.equal(failCooldownHours(1), 1);
+  assert.equal(failCooldownHours(3), 4);
+  assert.equal(failCooldownHours(20), 24);
 });
